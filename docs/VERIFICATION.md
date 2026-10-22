@@ -37,6 +37,10 @@ The checks that matter most:
 
 The supplied track is not in the GitHub repository. With it removed from `assets/music/`, the whole suite runs 195 tests and passes with 5 skipped (the tests that are about the track itself), and the source playthrough passes with `background_music` false, on the generated music. With the track present, none are skipped.
 
+A fresh clone of the GitHub repository (commit `41946b4`, 146 files, no music file) was tested the same way, using the project's Python: all 195 tests ran and passed with 5 skipped, and the playthrough passed with 36 screenshots, 35 reachable interaction points across 4,220 grid positions, and the generated music in use. This is the check that tests what was actually published.
+
+Every rebuild of `Common Ground.exe` that is committed adds another blob of about 37 MB to the repository's history.
+
 ## Rendered playthrough
 
 - All 35 interaction points were reachable on foot from spawn across 4,220 walkable grid positions, including every place on Hillside, the three sampling posts and the Part Two places.
