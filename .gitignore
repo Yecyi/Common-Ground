@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+saves/
+build/
+dist/
+work/
+*.spec
+
+# The supplied background track is not published: its creator and licence are unknown
+# (see docs/SOURCES.md). Without it the game falls back to its generated music.
+assets/music/*
+!assets/music/README.md
