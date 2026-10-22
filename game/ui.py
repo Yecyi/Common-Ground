@@ -80,7 +80,7 @@ class UI:
     def begin(self):
         self.buttons = []
 
-    def button(self, label, rect, action, hint="", primary=False, enabled=True, number=None):
+    def button(self, label, rect, action, hint="", primary=False, enabled=True, number=None, size=22):
         rect = pygame.Rect(rect)
         index = len(self.buttons)
         self.buttons.append((rect, action, enabled))
@@ -110,7 +110,7 @@ class UI:
                 self.text(line, (left, y+3), 17, WHITE if primary else MUTED)
                 y += self.font(17).get_linesize() + 1
         else:
-            self.text(label, (left, rect.centery), 22, fg, True, "midleft")
+            self.text(label, (left, rect.centery), size, fg, True, "midleft")
         return rect
 
     def selected(self):

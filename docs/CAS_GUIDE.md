@@ -53,6 +53,16 @@ Work through these with the game open, ideally with a second person. Write down 
 - **Representation.** Which voices does the story include, and whose experience is simplified? Compare with an example from your own community and cite the source.
 - **Outcome panels.** Do the groups named in the panels match the groups the text talks about? Would someone in one of those groups recognise themselves?
 
+### Added with Hillside and Storm Season
+
+- **The beds.** In the Hall, the player chooses between beds for elders, beds for families with children, or pooling the space. None is right, and each leaves someone with less. Read each result aloud. Does it make the person left with less sound like a failure, or like a real cost? Would someone in that group recognise themselves in the outcome panel?
+- **Noor and the limits of peer care.** Noor says neighbours are not nurses, and the check-in rota has a column for when to call a professional. Check that no scene suggests a conversation or a rota can replace care. Check that the listening hour is described as listening, and not as treatment. If a real nurse or counsellor is available, ask them to read these scenes.
+- **Kit.** Kit is a teenager whose work is dismissed in the first conversation if the player chooses badly. Does Kit read as a person with a view, or as a device for delivering river facts? Would a real teenager find the dialogue believable? Ask one.
+- **Odile.** Odile is an elder who talks about the past and is not hurried. Does she have wants of her own beyond being listened to? Does any line treat her age as a problem to manage? The scene where she is left alone at night should read as a cost the village learns from, and not as a punishment of the player.
+- **The storm as a disaster.** The storm has no victims, only costs. Is that honest, or does it make a disaster feel gentler than it is? Which real disasters has the team read about, and what did they show that the game leaves out?
+- **Who was never met.** The Part Two recap says which neighbours the player never met and so could not help in advance. Is that fair to the player, and does it say something true about who gets looked after?
+- **The hours.** Six hours and nine jobs make every plan leave something undone. Does the recap make that feel like a real trade-off, or like the player failed?
+
 Record the date, who reviewed, the version of the game, and what changed afterwards. This is evidence of the process, not of the game's impact.
 
 ## Review before presenting

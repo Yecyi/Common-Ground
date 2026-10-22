@@ -8,9 +8,15 @@ import random
 
 import pygame
 
-TILE = 32
-WIDTH, HEIGHT = 1120, 832
+from .layout import HEIGHT, RIVERSIDE_EDGE, TILE, WIDTH
+
 VIEW = pygame.Rect(0, 108, 1280, 636)
+# Windows of the Hall and the health post, lit from inside during the night of the storm.
+LIT_WINDOWS = tuple((1362 + x, 212 + 70, 14, 20) for x in (28, 54, 108, 134)) + ((1176 + 29, 228 + 60, 14, 18), (1176 + 91, 228 + 60, 14, 18))
+SANDBAGS = (1010, 396)
+COTS = (1450, 368)
+ORCHARD = (1400, 640)
+WEATHER_TINT = {"overcast": ((92, 104, 120), 46), "storm": ((14, 22, 46), 132), "aftermath": ((86, 100, 112), 38)}
 MILL = (665, 181)
 RIVER_X = 848
 
@@ -59,6 +65,29 @@ def _cue_chimney(state):
     return "Soot darkens the old mill chimney."
 
 
+def _cue_orchard(state):
+    if "memory_tree" not in state.completed:
+        return None
+    return "Young trees on the slope below the Hall, each one named after a child on the street."
+
+
+def _cue_hall(state):
+    phase = state.storm_phase()
+    if phase == "forecast" and "prep_hall" in state.completed:
+        return "Cots are stacked ready along the Hall's wall, and the water tanks are full."
+    if phase == "forecast":
+        return "The Common Hall is quiet. Soon it may be the only dry place for a lot of people."
+    if phase == "aftermath":
+        return "Mud on the Hall's steps, and cots still out where people slept."
+    return None
+
+
+def _cue_health_post(state):
+    if "beat_noor_1" in state.completed:
+        return "The health post door is propped open. A hand-lettered sign gives the hours, and a number to ring when someone needs more than a neighbour."
+    return "The health post is open two days a week. A box of leaflets holds the door."
+
+
 def rope_visible(state):
     """The queue rope stays until the circle moves away from a first-come queue."""
     if "council" not in state.completed:
@@ -79,6 +108,9 @@ CUES = (
     (925, 384, 70, _cue_sign),
     (420, 508, 70, _cue_rope),
     (693, 120, 90, _cue_chimney),
+    (1400, 600, 90, _cue_orchard),
+    (1450, 372, 90, _cue_hall),
+    (1240, 372, 70, _cue_health_post),
 )
 
 # Residents' homes are the Place coordinates; these are where they help once supported.
@@ -124,21 +156,39 @@ class World:
             Place("crate_1", "Shared repair supplies", 340, 490, "crate"),
             Place("crate_2", "Salvaged supplies", 734, 235, "crate"),
             Place("crate_3", "Riverside supplies", 1013, 514, "crate"),
+            # Hillside and the people who live beyond Riverside.
+            Place("kit", "Kit", 1110, 470, "kit", "npc"),
+            Place("noor", "Noor", 1240, 372, "noor", "npc"),
+            Place("odile", "Odile", 1650, 372, "odile", "npc"),
+            Place("sample_up", "River sample: upstream", 915, 140, "sample"),
+            Place("sample_out", "River sample: outflow", 915, 310, "sample"),
+            Place("sample_down", "River sample: downstream", 915, 610, "sample"),
+            Place("quiet_lookout", "The Lookout", 1568, 160, "bench", "quiet"),
+            # Part Two: Storm Season.
+            Place("storm", "Storm board at the Hall", 1400, 376, "noticeboard", "council"),
+            Place("recover_streets", "Storm debris in the square", 620, 372, "debris"),
+            Place("recover_homes", "Flooded Riverside homes", 1090, 395, "debris"),
+            Place("recover_hall", "The Hall after the night", 1500, 376, "debris"),
         ]
         self.homes = {p.id: (p.x, p.y) for p in self.places}
         self.decor = [
             ("house", 479, 241), ("house", 297, 320),
             ("house", 1010, 371), ("house", 1025, 657),
             ("workshop", 665, 181), ("house", 425, 722),
+            ("clinic", 1240, 340), ("hall", 1450, 340), ("cottage", 1650, 340),
         ]
         self.solids = [pygame.Rect(427,168,104,69),pygame.Rect(245,248,104,68),
                        pygame.Rect(958,298,104,69),pygame.Rect(973,584,104,69),
-                       pygame.Rect(605,107,120,70),pygame.Rect(373,649,104,69)]
+                       pygame.Rect(605,107,120,70),pygame.Rect(373,649,104,69),
+                       pygame.Rect(1188,267,104,69),pygame.Rect(1370,244,160,90),pygame.Rect(1612,280,76,54)]
         self.trees = [(135,232),(166,286),(185,199),(85,330),(290,190),
                       (577,223),(565,321),(778,169),(1010,199),(971,248),
                       (89,574),(124,645),(220,709),(298,702),(103,718),
                       (366,589),(559,548),(760,685),(926,740),(1080,740),
-                      (1060,440),(104,476),(544,787),(320,786),(97,115)]
+                      (1060,440),(104,476),(544,787),(320,786),(97,115),
+                      # Hillside
+                      (1140,150),(1200,170),(1300,160),(1380,150),(1470,140),(1620,170),(1700,150),(1731,260),
+                      (1331,300),(1180,560),(1230,700),(1300,760),(1560,540),(1640,700),(1720,600),(1500,740),(1660,500)]
         for x,y in self.trees:
             self.solids.append(pygame.Rect(x-9,y-14,18,16))
         self.solids.append(pygame.Rect(DEAD_TREE[0]-9,DEAD_TREE[1]-14,18,16))
@@ -151,12 +201,17 @@ class World:
         self.nearest = None
         self.synced_state = None
         self.motes = self.make_motes()
+        self.weather_layer = pygame.Surface((640, 318))
+        rng = random.Random(23)
+        self.rain = [(rng.uniform(0, 640), rng.uniform(0, 318), rng.uniform(.8, 1.3)) for _ in range(150)]
+        self.puddles = [(rng.uniform(40, WIDTH - 40), rng.uniform(80, HEIGHT - 40), rng.uniform(10, 26)) for _ in range(34)]
 
     def tile_kind(self,x,y):
         wx,wy=x*TILE,y*TILE
         if 800 <= wx < 896:
             return "bridge" if 384 <= wy < 448 else "water"
-        main = 64 <= wx < 1056 and 384 <= wy < 448
+        main = 64 <= wx < 1696 and 384 <= wy < 448
+        lookout_lane = 1536 <= wx < 1600 and 128 <= wy < 384
         spine = 448 <= wx < 512 and 128 <= wy < 736
         garden = 224 <= wx < 768 and 608 <= wy < 640
         west = 224 <= wx < 288 and 416 <= wy < 640
@@ -165,7 +220,7 @@ class World:
         pump_lane = 704 <= wx < 800 and 320 <= wy < 352
         east = 960 <= wx < 1024 and 320 <= wy < 640
         grove = 160 <= wx < 256 and 608 <= wy < 640
-        return "path" if any((main,spine,garden,west,factory,factory_lane,pump_lane,east,grove)) else "grass"
+        return "path" if any((main,spine,garden,west,factory,factory_lane,pump_lane,east,grove,lookout_lane)) else "grass"
 
     def make_background(self, restored):
         s = pygame.Surface((WIDTH,HEIGHT))
@@ -179,7 +234,7 @@ class World:
                     px,py=x*TILE+rng.randrange(24),y*TILE+rng.randrange(24)
                     pygame.draw.line(s,c,(px,py),(px+2,py-3))
         # Flat, low stone garden borders and the old mill's drainage outfall.
-        for r in [pygame.Rect(576,550,162,70),pygame.Rect(140,572,94,93)]:
+        for r in [pygame.Rect(576,550,162,70),pygame.Rect(140,572,94,93),pygame.Rect(1330,572,150,72),pygame.Rect(1528,118,80,66)]:
             pygame.draw.rect(s,(119,139,113) if restored else (125,129,112),r,3,border_radius=9)
         pygame.draw.rect(s,(96,110,103),(762,291,38,13))
         pygame.draw.rect(s,(65,89,82),(785,293,15,10))
@@ -202,7 +257,7 @@ class World:
 
     def make_motes(self):
         rng = random.Random(7)
-        return [(rng.uniform(0, WIDTH), rng.uniform(0, HEIGHT), rng.uniform(0, math.tau), rng.uniform(.6, 1.4)) for _ in range(70)]
+        return [(rng.uniform(0, WIDTH), rng.uniform(0, HEIGHT), rng.uniform(0, math.tau), rng.uniform(.6, 1.4)) for _ in range(110)]
 
     def walkable(self,position):
         x,y=position
@@ -302,10 +357,17 @@ class World:
             return "council" not in state.completed
         if p.id=="plots":
             return "garden_open" not in state.flags
+        if p.id.startswith("sample_"):
+            return "support_kit" not in state.completed
+        if p.id=="storm":
+            return "storm_forecast" not in state.completed
+        if p.id.startswith("recover_"):
+            return "storm_s5" not in state.completed or p.id in state.completed
         return False
 
     def zone(self):
         x,y=self.player
+        if x>RIVERSIDE_EDGE:return "HILLSIDE"
         if x>896:return "RIVERSIDE"
         if y<320:return "OLD MILL & COMMONS"
         if y>540 and x<360:return "WILLOW REFUGE"
@@ -353,6 +415,8 @@ class World:
             return self.art.sprite("dispute","dispute" in state.completed)
         if p.id=="plots":
             return self.art.sprite("noticeboard","plots" in state.completed)
+        if p.id.startswith("sample_"):
+            return self.art.sprite("sample",state.river_reading(p.id.split("_",1)[1])[0]>=2)
         restored=p.id in state.completed or (p.id=="pump" and "source_repaired" in state.flags)
         return self.art.sprite(p.sprite,restored)
 
@@ -431,6 +495,15 @@ class World:
                 layers.append((y+.1,"sprite",x,y,"soot",False,None))
         for x,y in self.trees:
             layers.append((y,"sprite",x,y,"tree",balance>.5,None))
+        phase=state.storm_phase()
+        if "memory_tree" in state.completed:
+            stage=max(1,state.garden_stage("memory_tree"))
+            layers.append((ORCHARD[1],"sprite",ORCHARD[0],ORCHARD[1],("orchard_seed","orchard_young","orchard")[stage-1],True,None))
+        if phase in ("forecast","night","aftermath"):
+            if "prep_drains" in state.completed:
+                layers.append((SANDBAGS[1],"sprite",SANDBAGS[0],SANDBAGS[1],"sandbags",False,None))
+            if "prep_hall" in state.completed:
+                layers.append((COTS[1],"sprite",COTS[0],COTS[1],"cots",False,None))
         layers.append((DEAD_TREE[1],"sprite",DEAD_TREE[0],DEAD_TREE[1],"deadtree","source_repaired" in state.flags,None))
         layers.append((SIGN[1],"sprite",SIGN[0],SIGN[1],"sign",cart_ready(state),None))
         if rope_visible(state):
@@ -473,12 +546,41 @@ class World:
                 self.grade.fill((255,208,140));self.grade.set_alpha(round((balance-.5)/.5*34))
             if self.grade.get_alpha(): self.low.blit(self.grade,(0,0))
         self.draw_particles(t,balance,reduce_motion,cam)
+        self.draw_weather(state,t,reduce_motion,cam,high_contrast)
         if marker is not None:
             self.draw_marker(marker,t,reduce_motion,cam)
         if self.path:
             end=self.path[-1]-cam
             pygame.draw.circle(self.low,(244,228,177),(round(end.x),round(end.y)),5,1)
         screen.blit(pygame.transform.scale(self.low,VIEW.size),VIEW.topleft)
+
+    def draw_weather(self,state,t,reduce_motion,cam,high_contrast=False):
+        """Overcast before the storm, heavy rain and lit windows during it, wet ground and puddles after."""
+        weather=state.weather()
+        if weather=="clear": return
+        colour,alpha=WEATHER_TINT[weather]
+        if high_contrast: alpha=round(alpha*.45)
+        self.weather_layer.fill(colour);self.weather_layer.set_alpha(alpha)
+        self.low.blit(self.weather_layer,(0,0))
+        if weather=="storm":
+            for x,y,w,h in LIT_WINDOWS:
+                rect=pygame.Rect(round(x-cam.x),round(y-cam.y),w,h)
+                if self.low.get_rect().colliderect(rect):
+                    pygame.draw.rect(self.low,(255,226,142),rect)
+                    pygame.draw.rect(self.low,(255,244,200),rect.inflate(-8,-10))
+        if weather=="aftermath":
+            for x,y,size in self.puddles:
+                sx,sy=x-cam.x,y-cam.y
+                if 0<=sx<640 and 0<=sy<318:
+                    pygame.draw.ellipse(self.low,(110,138,158),(round(sx-size/2),round(sy),round(size),round(size/3)))
+                    pygame.draw.ellipse(self.low,(150,176,194),(round(sx-size/3),round(sy+1),round(size*2/3),max(1,round(size/6))))
+            return
+        count=150 if weather=="storm" else 22
+        speed=260 if weather=="storm" else 90
+        for i,(bx,by,rate) in enumerate(self.rain[:count]):
+            y=by if reduce_motion else (by+t*speed*rate)%318
+            x=bx if reduce_motion else (bx-t*speed*rate*.25)%640
+            pygame.draw.line(self.low,(176,194,216) if weather=="storm" else (190,202,214),(round(x),round(y)),(round(x-2),round(y+(7 if weather=="storm" else 4))))
 
     def draw_smoke(self,t,reduce_motion,cam):
         """Dark puffs rise from the chimney while the old line is running."""

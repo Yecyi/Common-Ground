@@ -54,6 +54,41 @@ Record the build, date, starting state, result, and any replay steps for each ru
 - Finish with and without the optional chapters. Confirm both endings are reachable, the epilogue differs, and the recap lists every decision with who it helped, who it left out, and whether it was revisited. Scroll the recap with larger text.
 - Ask someone who has not seen the game to read the recap. Note which decisions they disagree with.
 
+## Hillside and the new neighbours
+
+- Walk east past Riverside to Hillside. Confirm the zone name changes, a short note appears once, and every building and the lookout can be reached on foot.
+- Meet Noor, Kit and Odile. Try the response that closes the door with each, confirm a small cost, then return and listen. Confirm the first conversation cannot be repeated for rewards.
+- Confirm Kit's second chapter waits for all three river readings, Odile's for the river pump, and Noor's for Rowan's trust. Confirm none costs supplies.
+- Plant Odile's orchard. Leave the village a while and confirm the saplings grow, and that the orchard is still there after saving and continuing.
+- Open the journal's Neighbours page. Confirm every neighbour is listed with their bond, what is next, and where to find anyone not yet met. Switch pages with the mouse and with the left and right arrow keys.
+
+## The river survey
+
+- Take a reading at each of Kit's three posts. Confirm each shows words as well as pips, and the first reading is a journal entry and later ones are not.
+- Repair the pump, take the factory route, and clear the litter by the river. Return to the posts after each and confirm the water reads better. Choose the factory restart and confirm it reads worse.
+- Open the journal's River page and confirm it matches the posts.
+
+## Part Two: Storm Season
+
+- Finish Part One. Confirm the forecast is offered at the circle, and that the suggestion points to it.
+- At the Hall board, spend the hours on different jobs across several runs. Confirm each job spends its own hours, a job that does not fit is refused with nothing spent, jobs for neighbours you have not met are not offered, and the planning table reopens after each task.
+- Wait on the board for a long time before choosing. Confirm the hours do not change.
+- Begin the night with some hours unspent, and with none. Confirm the five scenes follow each other, nothing can be prepared afterwards, and the text changes with what you prepared. Try at least three different routes through the night.
+- Leave the game mid-night, quit and continue. Confirm you can carry on from the board.
+- After dawn, confirm the debris, the puddles and the three recovery tasks, that the journal's goals stay ticked even if a value dipped, and that the circle only closes Storm Season once recovery is done.
+- Read the recap. Confirm it names who you reached and who you left out, and notes neighbours you never met.
+- Take it to someone who has not played it. Ask them what the night asked of them and which choice they regretted.
+
+## Weather
+
+- Watch the sky through the forecast, the night, the morning after and the clear-up. Confirm the lit windows appear only in the night and the scenery follows what you prepared (cots, sandbags).
+- With reduced motion, confirm rain and puddles are still. With high contrast, confirm the storm tint is gentler and the village is still readable.
+- Listen to the rain, the wind and the music through the storm with headphones. Confirm the music sits back and the birds are quiet.
+
+## Saves from earlier versions
+
+- Copy a save made by an earlier build into a spare folder and open it. Confirm Continue works, and that a finished journey is invited to Part Two.
+
 ## Sound
 
 - Walk from the mill to the river and the trees with headphones. Confirm machinery fades with distance and the river and birds come in.

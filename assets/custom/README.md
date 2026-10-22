@@ -16,7 +16,7 @@ This folder is separate from `assets/sprites/` on purpose. `assets/sprites/` hol
 | --- | --- | --- |
 | Any sprite | `<name>_polluted.png` and `<name>_restored.png` | For example `tree_polluted.png`, `pump_restored.png`. The two states are the struggling and the recovering village. |
 | Ground tiles | `tile_<grass\|path\|water\|bridge>_<polluted\|restored>.png` | 32 by 32 pixels. Other sizes are scaled to fit. |
-| A resident, before and after you listen | `mira_polluted.png` and `mira_restored.png` (also `rowan`, `amani`, `theo`) | `polluted` is how they look before you have listened, `restored` is after. |
+| A resident, before and after you listen | `mira_polluted.png` and `mira_restored.png` (also `rowan`, `amani`, `theo`, `kit`, `odile`, `noor`) | `polluted` is how they look before you have listened, `restored` is after. |
 | The player | `player_polluted.png` | One picture used for every direction and step. |
 | One walking frame | `player_<down\|up\|left\|right>_<0\|1\|2>_polluted.png` | Step 0 stands, steps 1 and 2 are the two walking frames. These override the single picture. Reference copies of all twelve are in `assets/sprites/`. |
 

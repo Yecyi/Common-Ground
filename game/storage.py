@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path
 
+from .layout import HEIGHT, WIDTH
 from .state import GameState
 
 DEFAULT_SETTINGS = {
@@ -12,7 +13,7 @@ DEFAULT_SETTINGS = {
     # A gentle marker over the next suggested place; on for new players.
     "show_way": True,
     # First-time prompts, each shown once.
-    "tip_move": False, "tip_talk": False, "tip_journal": False,
+    "tip_move": False, "tip_talk": False, "tip_journal": False, "tip_hillside": False,
 }
 
 
@@ -36,7 +37,7 @@ def load_game(path):
     position=data["position"]
     if not isinstance(position,list) or len(position)!=2 or any(type(v) not in (int,float) or not math.isfinite(v) for v in position):
         raise ValueError("Invalid player position")
-    if not (32<=position[0]<=1088 and 56<=position[1]<=800):
+    if not (32<=position[0]<=WIDTH-32 and 56<=position[1]<=HEIGHT-32):
         raise ValueError("Player position outside village")
     return state,position
 

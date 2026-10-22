@@ -10,7 +10,7 @@ The brief includes both Pygame and Unreal Engine 5. This implementation chooses 
 
 World Health Organization, War Trauma Foundation, and World Vision International. *Psychological first aid: Guide for field workers* (2011). [WHO publication page](https://www.who.int/publications-detail-redirect/9789241548205).
 
-The guide informs the dialogue's emphasis on respectful, practical support, listening without pressure, and attention to the person's own priorities. The later resident scenes and the de-escalation scene follow the same principles (offering choices, acknowledging feelings, not pressing for details); their wording is original. The game does not reproduce a clinical assessment or psychological first aid training program. Its fictional community values are gameplay abstractions.
+The guide informs the dialogue's emphasis on respectful, practical support, listening without pressure, and attention to the person's own priorities. The later resident scenes and the de-escalation scene follow the same principles (offering choices, acknowledging feelings, not pressing for details); their wording is original. Noor's scenes are written around the same principle that listening is not treatment, and that neighbours should know when to call someone with training; they are not clinical guidance, and the storm scenes are not a model of emergency planning. The game does not reproduce a clinical assessment or psychological first aid training program. Its fictional community values are gameplay abstractions.
 
 WHO Regional Office for Europe. *Urban green spaces and health* (2016). [WHO publication page](https://www.who.int/europe/publications/i/item/WHO-EURO-2016-3352-43111-60341).
 
@@ -26,7 +26,7 @@ The game plays whichever music file is in `assets/music/` (the first by name, am
 
 ## Implementation and assets
 
-The code, narrative, procedural pixel artwork, and synthesized ambient sound for this build were generated with coding assistance for the requested project. They are supplied as editable material. No supplied team art was available inside the source document, and these assets should not be credited as work completed by the named students.
+The code, narrative (including the neighbours of Hillside and Part Two), procedural pixel artwork, and synthesized ambient sound for this build were generated with coding assistance for the requested project. They are supplied as editable material. No supplied team art was available inside the source document, and these assets should not be credited as work completed by the named students.
 
 The runtime dependency is [Pygame Community Edition](https://pyga.me/), pinned in `requirements.txt`. Its [documentation](https://pyga.me/docs/) describes the display, drawing, event, font, and audio APIs used by the game. Pygame and its bundled components retain their own upstream licenses.
 

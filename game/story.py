@@ -59,6 +59,10 @@ class Beat:
     needs_flags: tuple = ()
     min_tasks: int = 0
     variant_key: str = ""
+    # A first meeting: a supportive response means you have listened to this person.
+    grants_support: bool = False
+    # Extra things a supportive response sets in motion, such as planting a tree.
+    sets: tuple = ()
 
     def intro_for(self, choices) -> str:
         return self.intro.get(choices.get(self.variant_key), self.intro["default"])
@@ -70,6 +74,10 @@ NPCS = {
     "amani": ("Amani", "Riverside resident and advocate"),
     "theo": ("Theo", "Former factory technician"),
     "council": ("The neighbourhood circle", "A shared decision"),
+    "kit": ("Kit", "Riverside student and river watcher"),
+    "odile": ("Odile", "Elder of the old orchard"),
+    "noor": ("Noor", "Community nurse at the health post"),
+    "storm": ("The storm board", "Part Two: Storm Season"),
     "dispute": ("Neighbours at the circle", "A tense moment"),
     "plots": ("The garden sign-up board", "A shared decision"),
 }
@@ -250,6 +258,140 @@ BEATS = (
         needs_completed=("beat_theo_2",), variant_key="theo",
     ),
 )
+# The neighbours beyond Riverside. Each has a first meeting and two later chapters; none costs supplies
+# and none is needed to finish, but they change who the village listens to.
+NEIGHBOUR_BEATS = (
+    Beat(
+        "kit_1", "kit",
+        {"default": "A teenager is crouched at the river bank with a jar, a notebook and a home test kit, writing numbers. 'Don't tell me it's just a school project,' Kit says before you speak. 'I've measured this river every week for a year. Nobody has asked to see it.'"},
+        (
+            Option("read", "Ask to see the notebook, and ask Kit to teach you how to read it.", "Treat their work as real work.",
+                   "A year of numbers", "Kit flips to the first page and explains what each column means, then lets you take a reading yourself. 'The river changes every week,' they say. 'Come back to it and you'll see why.' They mark three spots on the bank where the numbers matter most.",
+                   (("equity", 3), ("environment", 2), ("resilience", 2))),
+            Option("share", "Offer to pin their readings on the village noticeboard so everyone can see them.", "Put their data where decisions are made.",
+                   "On the noticeboard", "Kit goes quiet, then asks for a pencil. By the end of the afternoon a chart is pinned beside the old photograph, with Kit's name on it. 'People can argue with it,' they say, 'but they can't say nobody measured.' They mark three spots on the bank for you to try yourself.",
+                   (("equity", 3), ("resilience", 3))),
+            Option("leave", "Tell Kit to leave water testing to the experts.", "Dismissing someone's work closes the door.",
+                   "Not a real scientist", "Kit closes the notebook. 'That's what everyone says,' they mutter, and move further along the bank. You can come back and ask what the numbers say instead.",
+                   (("equity", -3), ("resilience", -2)), good=False),
+        ),
+        grants_support=True,
+    ),
+    Beat(
+        "kit_2", "kit",
+        {"default": "You have taken a reading at each of Kit's three spots. Kit looks over your shoulder at the table you filled in. 'Upstream is what this river can be,' they say. 'The further down you go, the more of our own choices you can see.'"},
+        (
+            Option("explain_circle", "Ask Kit to explain the readings to the neighbourhood circle.", "Give the data a place at the table.",
+                   "Data at the table", "Kit is terrified and does it anyway, with the chart in both hands. Three people ask questions. One is Theo, who has measured the same stretch from the other side for twenty years and had never compared notes with anyone.",
+                   (("equity", 4), ("environment", 2))),
+            Option("teach", "Suggest Kit run a river-testing session for the young people of the village.", "Pass the skill on.",
+                   "A Saturday of river science", "Eleven young people turn up with jars. Half of them have never been down to the river. By the end there are more notebooks in the village than there were adults who had ever held one.",
+                   (("resilience", 4), ("environment", 2))),
+        ),
+        needs_completed=("support_kit", "sample_up", "sample_out", "sample_down"),
+    ),
+    Beat(
+        "kit_3", "kit",
+        {"default": "The circle meets. Kit sits at the back with the notebook in their lap. 'They don't have a seat for anyone under sixteen,' they say quietly. 'I checked the minutes.'"},
+        (
+            Option("youth_seat", "Propose a standing seat on the circle for young people.", "Make the voice permanent.",
+                   "A seat for the young", "The proposal passes with two abstentions and a long argument about the age limit. Kit's name is on the first line of the new rule.",
+                   (("equity", 5), ("resilience", 2))),
+            Option("monthly_report", "Ask the circle to hear a river report from Kit every month.", "Keep the river on the agenda.",
+                   "The river on the agenda", "Once a month, before anything else, the circle hears what the river has been doing. Decisions about the pump and the mill now begin with Kit's table.",
+                   (("equity", 3), ("environment", 3))),
+        ),
+        needs_completed=("beat_kit_2",), needs_flags=("council_held",),
+    ),
+    Beat(
+        "odile_1", "odile",
+        {"default": "An elderly woman sits on the cottage porch with a blanket on her knees, facing west, where the river is. 'I used to swim in it,' Odile says, without turning around. 'There was an orchard on this hillside, before the mill. Sit, if you have the time. Most people don't.'"},
+        (
+            Option("sit", "Sit down and listen to as much of the story as she wants to tell.", "Time is the gift.",
+                   "The river before the mill", "Odile tells you about eels in the shallows, about the flood of '74 when a whole street shared one stove, and about the day the mill whistle first blew and the swallows left. By the time she stops, the light has changed. 'Nobody has asked in years,' she says.",
+                   (("resilience", 4), ("equity", 2), ("environment", 1))),
+            Option("ask", "Ask what she thinks the river needs now.", "Ask for her judgement, not only her memories.",
+                   "What she knows", "She counts on her fingers: the drain at the bottom of Riverside Road, the willow that holds the bank, the spring behind the old school that never froze. 'Write it down,' she says. 'Somebody will need it.' You do.",
+                   (("equity", 3), ("environment", 3))),
+            Option("hurry", "Say you are short of time and ask her to get to the point.", "Hurrying people can make them feel invisible.",
+                   "Not enough time", "Odile folds her hands. 'Of course. Nobody ever has,' she says, and turns back to the river. You can return, and this time stay a while.",
+                   (("resilience", -3), ("equity", -2)), good=False),
+        ),
+        grants_support=True,
+    ),
+    Beat(
+        "odile_2", "odile",
+        {"default": "The river runs clearer now, and Odile has asked you to walk with her down the slope below the Hall, where the orchard used to be. 'My father planted twelve trees,' she says. 'Three are left, if you can call them trees.'"},
+        (
+            Option("plant_here", "Offer to plant new saplings where the old orchard stood, with her directing.", "Let her decide where each tree goes.",
+                   "Twelve trees, again", "Odile points with her stick and the neighbours dig where she points. She names each sapling after a child on the street. 'They'll outlive me,' she says, 'which is the point.'",
+                   (("environment", 5), ("resilience", 3))),
+            Option("record", "Offer to record her stories, then plant a tree for each one.", "Keep the memory and the place together.",
+                   "A tree for every story", "Kit brings a phone and a notebook, which Odile pronounces 'sensible'. By the end of the afternoon there are four stories, four saplings and a plan for eight more.",
+                   (("environment", 3), ("resilience", 4), ("equity", 1))),
+        ),
+        needs_completed=("support_odile",), needs_flags=("source_repaired",), sets=("memory_tree",),
+    ),
+    Beat(
+        "odile_3", "odile",
+        {"default": "Odile arrives at the garden with a biscuit tin. 'Seeds from the old trees,' she says. 'Apples you cannot buy any more. I'd like them to go somewhere that will outlast me.'"},
+        (
+            Option("garden_share", "Plant them in the shared garden, with a label for each variety.", "A living record of the old orchard.",
+                   "Old apples, new beds", "The labels are in Odile's handwriting, because she insists. Children stop to read them. One asks what 'russet' means, and gets a twenty-minute answer.",
+                   (("equity", 2), ("environment", 4))),
+            Option("seed_swap", "Start a seed swap, so every household can take some home.", "Share it, rather than keep it in one place.",
+                   "A seed swap", "By the end of the week every street has a small tin of seeds and a rule that the tin must be refilled. Riverside, which has the least garden space, has the longest queue, and nobody minds.",
+                   (("equity", 4), ("environment", 2))),
+        ),
+        needs_completed=("beat_odile_2",), needs_flags=("garden_open",),
+    ),
+    Beat(
+        "noor_1", "noor",
+        {"default": "The health post's door is propped open with a box of leaflets. Noor, in scrubs and a cardigan, looks up from a waiting list. 'We're open two days a week,' she says. 'On the other five, people knock anyway. Half of them want someone to talk to, and half need more than I can give on my own. Some days I can't tell which is which.'"},
+        (
+            Option("ask_need", "Ask what would make the health post work better for the people who come.", "Ask the person who knows.",
+                   "What the post needs", "Noor lists them, in order: a second key, a private corner for talking, and a list of who to call when someone needs more than she can give. 'And someone to thank the volunteers,' she adds. You write it all down and thank the volunteers.",
+                   (("resilience", 3), ("equity", 3))),
+            Option("listening_hour", "Offer to help set up a drop-in listening hour on the other five days.", "Be clear about what it is, and what it is not.",
+                   "A listening hour", "Noor sketches a rota: two volunteers, one with training, a sign on the door, and a rule that nobody is asked to explain themselves. 'We'll be clear about what we are and aren't,' she says. 'We listen. We don't diagnose.'",
+                   (("resilience", 4), ("equity", 2))),
+            Option("relax", "Suggest people just need to relax and get some fresh air.", "Easy answers can leave people feeling unheard.",
+                   "Fresh air", "Noor gives a tired smile. 'If it were that easy, the waiting list would be empty,' she says, and turns back to her papers. You can come back and ask what she needs instead.",
+                   (("resilience", -3), ("equity", -2)), good=False),
+        ),
+        grants_support=True,
+    ),
+    Beat(
+        "noor_2", "noor",
+        {"default": "Noor has noticed that Rowan is doing better, and she wants to talk about why. 'Company helped,' she says. 'So did being asked. A neighbour who checks in is worth a lot. But neighbours aren't nurses, and I don't want us to pretend they are.'"},
+        (
+            Option("check_in_rota", "Help set up a neighbour check-in rota, with a clear list of when to call Noor.", "Care with a safety net.",
+                   "A rota with a safety net", "The rota has two columns: 'what you can do' and 'when to call'. Under the second, Noor has written the signs that someone needs more than a friend, in plain words, with the number to ring. By evening it is stuck to the fridge in four houses.",
+                   (("resilience", 5), ("equity", 2))),
+            Option("training", "Ask Noor to run a short session on listening well and knowing your limits.", "Help neighbours help well.",
+                   "Listening, and its limits", "Fourteen neighbours come. Noor teaches three things: ask, listen, and know who to call. 'You are not responsible for fixing anyone,' she says. 'You are responsible for not leaving them alone.'",
+                   (("resilience", 4), ("equity", 2))),
+        ),
+        needs_completed=("support_noor", "support_rowan"),
+    ),
+    Beat(
+        "noor_3", "noor",
+        {"default": "Noor lays two timetables on the table. 'The post has funding for four more hours a week,' she says. 'Mornings, when the square is busy and the retired come in? Or evenings, when shift workers and Riverside parents can finally get here? I can't do both.'"},
+        (
+            Option("evenings", "Put the extra hours in the evenings.", "Open when the people who find it hardest can come.",
+                   "Open when people can come", "Within a fortnight the evening list is full, mostly with people who had never been before. The mornings feel quieter, and a few regulars grumble. Noor puts a sign on the door explaining why.",
+                   (("equity", 5), ("resilience", 2))),
+            Option("mornings", "Put the extra hours in the mornings.", "Serve the people already coming, better.",
+                   "Open when it is busiest", "The morning waiting room is full and friendly. The evening shift workers still cannot come, and a few tell Amani so. Noor writes it in the minutes.",
+                   (("equity", 1), ("resilience", 4))),
+            Option("split", "Split the hours, and ask the circle to find volunteers for the rest.", "Share the shortfall.",
+                   "Half and half", "Neither timetable is perfect. It is, Noor says, 'a plan we can keep.' Volunteers cover what funding cannot. Nobody is fully served, and everybody can see why.",
+                   (("equity", 3), ("resilience", 3))),
+        ),
+        needs_completed=("beat_noor_2",), needs_flags=("council_held",),
+    ),
+)
+BEATS = BEATS + NEIGHBOUR_BEATS
 BEAT_BY_ID = {beat.id: beat for beat in BEATS}
 
 DISPUTE_INTRO = {
@@ -406,3 +548,49 @@ EPILOGUE_ARCS = {
     "theo": "Theo's crew and Riverside meet in the same room, with the factory plan on the table.",
 }
 EPILOGUE_NO_ARCS = "The neighbours' stories are still unfolding. There are conversations left to have."
+
+
+# The river survey: three sampling posts along the bank, read with Kit's test kit.
+SURVEY_LABELS = ("Clarity", "River life", "Safe to drink")
+SURVEY_SITES = {
+    "up": ("Upstream", "Above the mill the water is cold and clear. Kit calls this the reference site: 'This is what the whole river could be.'"),
+    "out": ("The outflow", "Below the mill outfall the water is where the village's choices show most. Kit writes the numbers without comment, then underlines them."),
+    "down": ("Downstream", "Past the village the river has had some time to recover. Kit says this is the stretch that tells you how far the damage travels."),
+}
+SURVEY_FIRST_TITLE = "A river reading"
+
+# Extra recap rows for the people beyond Riverside.
+RECAP_PEOPLE.update({
+    "kit": ("Kit", {"read": "Asked Kit to teach you to read the notebook.", "share": "Offered to pin Kit's readings on the noticeboard."}),
+    "odile": ("Odile", {"sit": "Sat and listened to Odile's whole story.", "ask": "Asked Odile what the river needs now."}),
+    "noor": ("Noor", {"ask_need": "Asked Noor what the health post needs.", "listening_hour": "Offered to help set up a listening hour."}),
+})
+RECAP_PEOPLE_FIRST_BEAT = {"kit": "kit_1", "odile": "odile_1", "noor": "noor_1"}
+RECAP["clinic"] = {
+    "label": "Health post hours",
+    "values": {
+        "evenings": ("Put the extra hours in the evenings.", "Shift workers and Riverside parents, who could finally get an appointment.", "Regulars who prefer mornings, and people who rely on the morning rush."),
+        "mornings": ("Put the extra hours in the mornings.", "The retired and people already used to coming in.", "Shift workers and parents who cannot reach the post in the day."),
+        "split": ("Split the hours and asked for volunteers.", "A bit of everyone, and a plan the village can keep.", "Everyone a little: nobody is fully served."),
+    },
+    "question": "When you cannot serve everyone, whose need comes first, and who decides?",
+}
+EPILOGUE_ARCS.update({
+    "kit": "Kit has a seat on the circle, and the river's numbers come before the pump's budget.",
+    "odile": "Odile's apples are in the garden, labelled in her handwriting, and the saplings on the old orchard bank have their names.",
+    "noor": "The health post keeps its listening hour, and every neighbour check-in rota has a column for when to call a professional.",
+})
+EPILOGUE_ORCHARD = "On the slope below the Hall, where Odile's father once planted twelve trees, a short row of saplings is growing, each one named."
+
+
+METRIC_WORDS = {"environment": "nature", "equity": "fair access", "resilience": "resilience"}
+
+
+def effects_text(effects) -> str:
+    """The small summary appended to a result, such as "  +6 resilience, -2 fair access."."""
+    return "  " + ", ".join(f"{amount:+d} {METRIC_WORDS[metric]}" for metric, amount in effects) + "." if effects else ""
+
+
+def bump(outcome):
+    """A review improves each group that was not already fully reached."""
+    return tuple((label, min(3, level + 1)) for label, level in outcome)

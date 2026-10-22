@@ -23,6 +23,7 @@ from .story import (
     EPILOGUE_PLOTS,
     EPILOGUE_PLOTS_REVIEW,
     EPILOGUE_RETROFIT,
+    EPILOGUE_ORCHARD,
     EPILOGUE_REVIEW,
     INTRO,
     LORE,
@@ -36,31 +37,47 @@ from .story import (
     PLOTS_REVIEW,
     RECAP,
     RECAP_PEOPLE,
+    RECAP_PEOPLE_FIRST_BEAT,
     RECAP_PEOPLE_MISSED,
     ROWAN_START,
+    SURVEY_LABELS,
+    SURVEY_SITES,
     THEO_START,
     Choice,
     Conversation,
     Result,
+    bump,
+    effects_text,
 )
+from .storm import FLAG_NEEDS, HOURS_TOTAL, PART_TWO_IDS, PREP, PREP_ORDER, RECOVER, SCENE_CHOICES, SCENES, StormMixin
+from .story import OUTCOME_WORDS
 
 
 LITTER_IDS = {f"litter_{i}" for i in range(1, 7)}
 CRATE_IDS = {f"crate_{i}" for i in range(1, 4)}
 GARDEN_IDS = {f"garden_{i}" for i in range(1, 4)}
 PEOPLE = {"mira", "rowan", "amani", "theo"}
+# Neighbours beyond Riverside: optional, and never needed to finish.
+NEIGHBOURS = {"kit", "odile", "noor"}
+ALL_PEOPLE = PEOPLE | NEIGHBOURS
+SAMPLE_IDS = {"sample_up", "sample_out", "sample_down"}
 TASK_IDS = LITTER_IDS | CRATE_IDS | GARDEN_IDS | {"pump", "quiet"}
-QUIET_SPOTS = ("quiet_river", "quiet_garden")
+QUIET_SPOTS = ("quiet_river", "quiet_garden", "quiet_lookout")
+# Things that grow while you explore: the three garden beds and the orchard planted for Odile.
+GROWTH_IDS = GARDEN_IDS | {"memory_tree"}
+# How the river read when the village began, for comparison with Kit's readings now.
+SURVEY_BASELINE = {"up": (3, 3, 3), "out": (0, 0, 0), "down": (1, 0, 0)}
 DISPUTE_GOOD = {o.id for o in DISPUTE_OPTIONS if o.good}
 DISPUTE_BAD = {o.id for o in DISPUTE_OPTIONS if not o.good}
 KNOWN_COMPLETED = (
     LITTER_IDS | CRATE_IDS | GARDEN_IDS
-    | {f"support_{person}" for person in PEOPLE}
+    | {f"support_{person}" for person in ALL_PEOPLE}
     | {f"rejected_{person}" for person in PEOPLE}
     | {f"beat_{beat.id}" for beat in BEATS}
     | {f"rejected_{beat.id}" for beat in BEATS if any(not o.good for o in beat.options)}
     | {"pump", "quiet", "noticeboard", "council", "council_review", "factory", "factory_retrofit", "finish",
-       "dispute", "rejected_dispute", "plots", "plots_review", *QUIET_SPOTS}
+       "dispute", "rejected_dispute", "plots", "plots_review", "memory_tree", *QUIET_SPOTS}
+    | SAMPLE_IDS | PART_TWO_IDS
 )
 KNOWN_FLAGS = {
     "source_repaired", "garden_open", "support_network", "quiet_reflected",
@@ -78,22 +95,13 @@ CHOICE_VALUES = {
     "plots_review": {"review"},
     "dispute": DISPUTE_GOOD | DISPUTE_BAD,
     **{beat.id: {o.id for o in beat.options} for beat in BEATS},
+    **SCENE_CHOICES,
 }
-METRIC_WORDS = {"environment": "nature", "equity": "fair access", "resilience": "resilience"}
 TENSION_FIRST_MEETING = 0.5
 
 
-def effects_text(effects) -> str:
-    return "  " + ", ".join(f"{amount:+d} {METRIC_WORDS[metric]}" for metric, amount in effects) + "." if effects else ""
-
-
-def bump(outcome):
-    """A review improves each group that was not already fully reached."""
-    return tuple((label, min(3, level + 1)) for label, level in outcome)
-
-
-class GameState:
-    SAVE_VERSION = 2
+class GameState(StormMixin):
+    SAVE_VERSION = 3
 
     def __init__(self) -> None:
         self.metrics = {"environment": 24, "equity": 28, "resilience": 30}
@@ -151,6 +159,81 @@ class GameState:
         age = max(0.0, self.play_seconds - self.planted_at.get(garden_id, 0.0))
         return 1 if age < 45 else 2 if age < 120 else 3
 
+    def bond(self, person: str) -> int:
+        """How far a friendship has grown, 0 to 3: listened to, then two later chapters."""
+        first = f"beat_{person}_1" if person in NEIGHBOURS else f"support_{person}"
+        return sum(1 for step in (first, f"beat_{person}_2", f"beat_{person}_3") if step in self.completed)
+
+    def river_reading(self, site: str) -> tuple[int, int, int]:
+        """Clarity, river life and safety to drink (0-3) at a sampling post, from what the village has done."""
+        def clamp(value):
+            return max(0, min(3, int(value)))
+        upstream = SURVEY_BASELINE["up"]
+        if site == "up":
+            reading = upstream
+        else:
+            repaired = "source_repaired" in self.flags
+            shared = "factory_shared" in self.flags
+            restart = self.choices.get("theo") == "restart" and not shared
+            both_litter = {"litter_2", "litter_5"} <= self.completed
+            green = self.metrics["environment"]
+            outflow = (clamp(2 * repaired + both_litter - restart),
+                       clamp(repaired + shared + (green >= 60) - restart),
+                       clamp(repaired + shared + (green >= 75) - restart))
+            reading = outflow if site == "out" else tuple(clamp(round((2 * o + u) / 3)) for o, u in zip(outflow, upstream))
+            # After a storm the water carries runoff for a while.
+            if self.storm_phase() in ("night", "aftermath"):
+                reading = (clamp(reading[0] - 1), reading[1], reading[2])
+        return reading
+
+    def _sample(self, action_id: str) -> Result:
+        if "support_kit" not in self.completed:
+            return Result(False, "No test kit", "Someone who tests the river keeps a kit here. Find the person who does, and ask.")
+        site = action_id.split("_", 1)[1]
+        label, blurb = SURVEY_SITES[site]
+        reading = self.river_reading(site)
+        start = SURVEY_BASELINE[site]
+        trend = "better than" if sum(reading) > sum(start) else "no better than" if sum(reading) == sum(start) else "worse than"
+        then = ", ".join(f"{name.lower()} {OUTCOME_WORDS[level].lower()}" for name, level in zip(SURVEY_LABELS, start))
+        text = f"{blurb} Today's reading is {trend} when the village began ({then})."
+        extra = dict(outcome=tuple(zip(SURVEY_LABELS, reading)), outcome_title=f"River reading: {label.lower()}")
+        first = action_id not in self.completed
+        self.completed.add(action_id)
+        if first:
+            return self._record(f"River reading: {label.lower()}", text, **extra)
+        return Result(True, f"River reading: {label.lower()}", text, **extra)
+
+    def neighbour_cards(self) -> list[dict]:
+        """One entry per neighbour for the journal: who they are, how far you have come, and what is next."""
+        where = {"noor": "At the health post on Hillside, east of the river.", "kit": "On the east bank of the river, where Riverside meets Hillside.", "odile": "On the porch of her cottage, at the far end of Hillside."}
+        phrases = {"source_repaired": "the river pump is repaired", "garden_open": "all three garden beds are planted", "council_held": "the circle has met",
+                   "sample_up": "you have taken Kit's three river readings", "support_rowan": "you have listened to Rowan"}
+        cards = []
+        for person in ("mira", "rowan", "amani", "theo", "noor", "kit", "odile"):
+            name, role = NPCS[person]
+            met = f"support_{person}" in self.completed
+            if not met:
+                again = f"rejected_{person}" in self.completed or f"rejected_{person}_1" in self.completed
+                note = f"{name} is willing to talk again. Listen this time." if again else (where.get(person) or "You have not listened to them yet.")
+            else:
+                beat = self.available_beat(person)
+                upcoming = next((b for b in BEATS if b.person == person and f"beat_{b.id}" not in self.completed), None)
+                if beat:
+                    note = "Has more to say. Another conversation may help."
+                elif upcoming is None:
+                    note = "Their story has come full circle."
+                else:
+                    waiting = []
+                    for item in (*upcoming.needs_flags, *upcoming.needs_completed):
+                        if item in self.flags or item in self.completed:
+                            continue
+                        waiting.append(phrases.get(item, "the earlier chapter is done" if item.startswith("beat_") else "you have helped with a few more things"))
+                    if upcoming.min_tasks > self.task_count():
+                        waiting.append("you have helped with a few more tasks")
+                    note = "Next chapter opens once " + " and ".join(dict.fromkeys(waiting)) + "." if waiting else "Another chapter is waiting."
+            cards.append({"id": person, "name": name, "role": role, "met": met, "bond": self.bond(person), "note": note})
+        return cards
+
     def objectives(self) -> list[tuple[str, bool]]:
         return [
             ("Repair the river pump (4 supplies)", "source_repaired" in self.flags),
@@ -175,6 +258,8 @@ class GameState:
         world resolves it. The suggestion never blocks any other order of play.
         """
         c, supplies = self.completed, self.resources["supplies"]
+        if "finish" in c:
+            return self._part_two_step()
         if "support_mira" not in c:
             text = "Mira is willing to try again. Return and listen this time." if "rejected_mira" in c else "Talk to Mira near the crossroads. Walk close and press E."
             return text, "mira"
@@ -216,8 +301,47 @@ class GameState:
                 return "The garden sign-up board needs a decision about who gets a plot.", "plots"
             if "council" in c and "dispute" not in c:
                 return "Voices are raised at the neighbourhood circle. Someone could help.", "dispute"
+            step = self._neighbour_step()
+            if step:
+                return step
             return "Keep caring for the village: revisit neighbours and earlier decisions.", None
         return "Return to the neighbourhood circle to agree on the town's future.", "council"
+
+    def _neighbour_step(self):
+        """Suggestions for the optional neighbours beyond Riverside."""
+        c = self.completed
+        for person in ("noor", "kit", "odile"):
+            if f"support_{person}" not in c:
+                name = NPCS[person][0]
+                if f"rejected_{person}_1" in c:
+                    return f"{name} is willing to talk again. Return and listen this time.", person
+                return f"{name} lives beyond Riverside. A conversation there may help.", person
+        samples = [site for site in ("sample_up", "sample_out", "sample_down") if site not in c]
+        if samples:
+            return "Take a river reading at each of Kit's sample posts.", samples[0]
+        for person in ("noor", "kit", "odile"):
+            if self.available_beat(person):
+                return f"{NPCS[person][0]} has more to say. Another conversation may help.", person
+        return None
+
+    def _part_two_step(self):
+        phase = self.storm_phase()
+        if phase == "invited":
+            return "A storm forecast is pinned at the neighbourhood circle. Read it when you are ready (Part Two).", "council"
+        if phase == "forecast":
+            if self.prep_available() and self.prep_hours_left() > 0:
+                return f"A storm is coming. Plan at the Hall board: {self.prep_hours_left()} hours of daylight are left.", "storm"
+            return "Begin the night at the Hall board when you are ready.", "storm"
+        if phase == "night":
+            return "The storm is here. Carry on at the Hall board.", "storm"
+        if phase == "aftermath":
+            left = self.recovery_remaining()
+            if left:
+                names = {"recover_streets": "Clear the storm debris in the square.", "recover_homes": "Help dry out Riverside's flooded homes.", "recover_hall": "Close up the Hall after the night."}
+                return names[left[0]], left[0]
+            return "Gather at the neighbourhood circle to talk about what the storm taught you.", "council"
+        step = self._neighbour_step()
+        return step if step else ("Storm Season is over. Nothing more is required; the village is yours to explore.", None)
 
     # ------------------------------------------------------------------- actions
     def perform(self, action_id: str) -> Result:
@@ -225,6 +349,8 @@ class GameState:
             return self._finish()
         if action_id == "council":
             return Result(True, "The neighbourhood circle", self.dialogue("council").text)
+        if action_id in SAMPLE_IDS:
+            return self._sample(action_id)
         if action_id in self.completed:
             repeats = {
                 "quiet": ("A place to pause", "The bench is here whenever you need it. There is no timer and nothing to earn. Listen to the river or simply sit for a while."),
@@ -235,6 +361,10 @@ class GameState:
                 repeats[spot] = repeats["quiet"]
             title, text = repeats.get(action_id, ("Already cared for", "This place has already been restored. Your work here is part of a lasting change; there is no need to repeat it."))
             return Result(True, title, text)
+        if action_id in RECOVER:
+            if self.storm_phase() != "aftermath":
+                return Result(False, "Nothing to clear", "There is nothing here yet.")
+            return self.recover(action_id)
         if action_id in LITTER_IDS:
             self.completed.add(action_id)
             self.resources["supplies"] += 1
@@ -279,6 +409,11 @@ class GameState:
             if "source_repaired" in self.flags:
                 return "Beside the water", "The river sounds different from here now: a steady, clear voice rather than a murmur. You watch it pass. Nobody asks anything of you, and nothing is earned by sitting."
             return "Beside the water", "The river moves slowly past, still carrying a faint film from the mill. You sit with that for a while. A place can be unfinished and still be a good place to rest."
+        if spot == "quiet_lookout":
+            river = "The river is a clear ribbon" if "source_repaired" in self.flags else "The river is a pale ribbon, still carrying a trace of the mill"
+            garden = "the garden is a neat patch of rows" if GARDEN_IDS <= self.completed else "the garden is still being planted"
+            orchard = ", and a short row of young trees leans towards the Hall" if "memory_tree" in self.completed else ""
+            return "Above the valley", f"From up here the whole valley is laid out like a map. {river}, {garden}{orchard}. Below you are the Hall, the health post and a few lit windows. Nothing here asks for anything."
         planted = len(GARDEN_IDS & self.completed)
         if planted == 3:
             body = "All three beds are planted. From here the rows look like a small, deliberate promise. You do not need to do anything about it today."
@@ -323,6 +458,10 @@ class GameState:
             return self._dispute_dialogue()
         if npc_id == "plots":
             return self._plots_dialogue()
+        if npc_id == "storm":
+            return self._storm_dialogue()
+        if npc_id in NEIGHBOURS:
+            return self._neighbour_dialogue(npc_id)
         supported = f"support_{npc_id}" in self.completed
         rejected = f"rejected_{npc_id}" in self.completed
         reflect = Choice("reflect", "What should we remember?", "Hear their reflection.")
@@ -361,6 +500,21 @@ class GameState:
             options = [option for option in options if option.id != bad_id]
         return Conversation(name, role, opening, options, tension=0.35 if rejected else TENSION_FIRST_MEETING)
 
+    def _neighbour_dialogue(self, npc_id: str) -> Conversation:
+        name, role = NPCS[npc_id]
+        reflect = Choice("reflect", "What should we remember?", "Hear their reflection.")
+        supported = f"support_{npc_id}" in self.completed
+        beat = self.available_beat(npc_id)
+        if beat:
+            choices = self._beat_choices(beat) + ([reflect] if supported else [])
+            return Conversation(name, role, self._beat_text(beat), choices, tension=0.35 if supported else TENSION_FIRST_MEETING)
+        after = {
+            "kit": "I check the posts every Saturday now, and there is always someone with me. The numbers are better, but I have stopped thinking of them as the point. The point is that someone is looking.",
+            "odile": "The saplings are getting taller. I tell them off if they lean. The river looks different from the porch, now that people are looking at it again.",
+            "noor": "The post is busier than ever, which is what it is for. If it ever gets quiet, I will worry. Come and see us if you need to talk to someone yourself; that is allowed too.",
+        }[npc_id]
+        return Conversation(name, role, after, [reflect])
+
     def _theo_dialogue(self) -> Conversation:
         role = NPCS["theo"][1]
         if "factory" not in self.completed:
@@ -391,6 +545,12 @@ class GameState:
                 Choice("queue", "Let the first people in the queue collect first.", "6 supplies. Quick to organise; shift workers and remote homes may miss out."),
             ], tension=0.7)
         options = []
+        if "finish" in self.completed:
+            phase = self.storm_phase()
+            if phase == "invited":
+                options.append(Choice("storm_forecast", "Read the forecast pinned to the board: a storm is coming.", "Part Two: Storm Season. Nothing in it costs supplies."))
+            elif phase == "aftermath" and not self.recovery_remaining():
+                options.append(Choice("storm_close", "Gather and talk about what the storm taught you.", "Close Storm Season."))
         if "council_review" not in self.completed:
             options.append(Choice("review", "Review who was missed and share the decisions.", "No supplies needed. Add delivery, representation and an appeal route."))
         options.append(Choice("finish", "Gather everyone and agree the next chapter.", "Finish when every balance goal in your journal is met."))
@@ -443,10 +603,16 @@ class GameState:
                 "council": "Still to care for: " + "; ".join(label for label, done in self.objectives() if not done) if not self.can_finish else "The balance goals are ready. Gather the neighbourhood when you are ready to agree the next chapter.",
                 "dispute": "A pause, a name for each fear and a shared need turned an argument into a conversation. People are rarely persuaded while they feel unheard.",
                 "plots": "Who gets a place is a decision about whose time, space and access count. A fair process can still leave someone out, so it helps to keep the door open.",
+                "kit": "Evidence is not only for experts. The numbers mattered because someone kept taking them when nobody asked, and because someone else finally read them.",
+                "odile": "A place remembers more than its records do. The people who have been somewhere longest are an archive that does not come with an index, so it helps to ask before it is too late.",
+                "noor": "Neighbours can offer company, attention and a phone number. They cannot be nurses, and they should not try. Knowing where your help stops is part of helping well.",
+                "storm": "Nobody can prepare for everything. What a village can do is decide, together and in advance, who it will look after first, and then check afterwards whether it kept its word.",
             }
             return Result(True, "A moment to reflect", reflections[npc_id])
         if ":" in choice_id:
             return self._choose_beat(npc_id, choice_id)
+        if npc_id == "storm":
+            return self._choose_storm(choice_id)
         if npc_id == "council":
             return self._choose_council(choice_id)
         if npc_id == "theo":
@@ -478,7 +644,16 @@ class GameState:
         option = next(o for o in beat.options if o.id == option_id)
         self.choices[beat.id] = option.id
         self._apply(option.effects)
-        self.completed.add(f"beat_{beat.id}" if option.good else f"rejected_{beat.id}")
+        if not option.good:
+            self.completed.add(f"rejected_{beat.id}")
+        else:
+            self.completed.add(f"beat_{beat.id}")
+            if beat.grants_support:
+                self.completed.add(f"support_{beat.person}")
+            for extra in beat.sets:
+                self.completed.add(extra)
+                if extra in GROWTH_IDS:
+                    self.planted_at[extra] = self.play_seconds
         return self._record(option.title, option.text + effects_text(option.effects), resolved=option.good)
 
     def _choose_dispute(self, choice_id: str) -> Result:
@@ -532,6 +707,10 @@ class GameState:
     def _choose_council(self, choice_id: str) -> Result:
         if choice_id == "finish":
             return self._finish()
+        if choice_id == "storm_forecast":
+            return self.read_forecast()
+        if choice_id == "storm_close":
+            return self.storm_close()
         if choice_id == "review":
             self.completed.add("council_review")
             self.choices["council_review"] = "review"
@@ -576,10 +755,17 @@ class GameState:
             "amani": "Who is missing from the decisions that affect them?",
             "mira": "How do you share a load that one person has been carrying?",
         }
-        for person, (name, chosen_by_choice) in RECAP_PEOPLE.items():
-            response = self.choices.get(person)
+        questions.update({
+            "kit": "Whose evidence counts, and who decides?",
+            "odile": "What does a community lose when its elders go unheard?",
+            "noor": "What can neighbours offer, and when is it right to call a professional?",
+        })
+        for person in ("rowan", "amani", "mira", "noor", "kit", "odile"):
+            name, chosen_by_choice = RECAP_PEOPLE[person]
+            first = RECAP_PEOPLE_FIRST_BEAT.get(person)
+            response = self.choices.get(first or person)
             if response in chosen_by_choice:
-                again = f"rejected_{person}" in self.completed
+                again = f"rejected_{first}" in self.completed if first else f"rejected_{person}" in self.completed
                 row(f"Talking with {name}", chosen_by_choice[response], f"{name}, who was asked rather than told.", RECAP_PEOPLE_MISSED,
                     "Revisited: a first response closed the door, and you came back." if again else "Their wishes came first from the start.", questions[person])
         factory = self.choices.get("theo")
@@ -600,6 +786,10 @@ class GameState:
             else:
                 revisited = "Revisited: a second round widened access." if "plots_review" in self.completed else "Not revisited."
             row(RECAP["plots"]["label"], chosen, benefited, missed, revisited, RECAP["plots"]["question"])
+        clinic = self.choices.get("noor_3")
+        if clinic in RECAP["clinic"]["values"]:
+            chosen, benefited, missed = RECAP["clinic"]["values"][clinic]
+            row(RECAP["clinic"]["label"], chosen, benefited, missed, "Not revisited.", RECAP["clinic"]["question"])
         dispute = self.choices.get("dispute")
         if "dispute" in self.completed and dispute in DISPUTE_GOOD:
             chosen, benefited, missed = RECAP["dispute"]["values"][dispute]
@@ -622,7 +812,9 @@ class GameState:
             paragraphs.append(EPILOGUE_PLOTS[plots] + (EPILOGUE_PLOTS_REVIEW if "plots_review" in self.completed else ""))
         if "dispute" in self.completed:
             paragraphs.append(EPILOGUE_DISPUTE)
-        arcs = [EPILOGUE_ARCS[person] for person in ("rowan", "mira", "amani", "theo") if f"beat_{person}_3" in self.completed]
+        if "memory_tree" in self.completed:
+            paragraphs.append(EPILOGUE_ORCHARD)
+        arcs = [EPILOGUE_ARCS[person] for person in ("rowan", "mira", "amani", "theo", "noor", "kit", "odile") if f"beat_{person}_3" in self.completed]
         paragraphs.append(" ".join(arcs) if arcs else EPILOGUE_NO_ARCS)
         return paragraphs
 
@@ -646,6 +838,7 @@ class GameState:
 
         Version 1 had no garden growth record. Beds from a version 1 save are
         treated as planted at the very start, so they appear fully grown.
+        Version 2 becomes version 3 unchanged: the newer version only allows more story.
         """
         if not isinstance(data, dict) or type(data.get("version")) is not int:
             raise ValueError("Unsupported or missing save version")
@@ -655,6 +848,10 @@ class GameState:
             beds = sorted(GARDEN_IDS & set(completed)) if isinstance(completed, list) and all(isinstance(x, str) for x in completed) else []
             data["version"] = 2
             data["planted_at"] = {bed: 0.0 for bed in beds}
+        if data["version"] == 2:
+            # Version 3 only adds more things that can happen (Hillside, new neighbours, Part Two).
+            data = dict(data)
+            data["version"] = 3
         return data
 
     @classmethod
@@ -695,7 +892,7 @@ class GameState:
         completed = set(data["completed"])
         flags = set(data["flags"])
         planted = data["planted_at"]
-        if not isinstance(planted, dict) or set(planted) != GARDEN_IDS & completed:
+        if not isinstance(planted, dict) or set(planted) != GROWTH_IDS & completed:
             raise ValueError("Invalid garden growth record")
         if any(type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1_000_000_000 for value in planted.values()):
             raise ValueError("Invalid garden growth times")
@@ -752,8 +949,10 @@ class GameState:
         state.journal = [dict(entry) for entry in entries]
         state.play_seconds = float(seconds)
         state.planted_at = {key: float(value) for key, value in planted.items()}
-        if "finish" in completed and not state.can_finish:
-            raise ValueError("The saved ending does not meet the balance goals")
+        # The ending needs the milestones. The three values may have moved since (a pressuring reply, or
+        # the storm in Part Two), so only the milestones are checked, never the values.
+        if "finish" in completed and not all(done for _, done in state.objectives()[:5]):
+            raise ValueError("The saved ending does not meet the milestones")
         return state
 
     @staticmethod
@@ -773,6 +972,13 @@ class GameState:
                 and tasks >= beat.min_tasks
             ):
                 raise ValueError("A resident scene was completed before its conditions")
+            if beat.grants_support and (f"support_{beat.person}" in completed) != done:
+                raise ValueError("Inconsistent first meeting")
+            if any((extra in completed) != done for extra in beat.sets):
+                raise ValueError("Inconsistent chapter outcome")
+        if SAMPLE_IDS & completed and "support_kit" not in completed:
+            raise ValueError("River readings need Kit's test kit")
+        GameState._validate_part_two(completed, flags, choices)
         response = choices.get("dispute")
         done, rejected = "dispute" in completed, "rejected_dispute" in completed
         if done != (response in DISPUTE_GOOD) or (response in DISPUTE_BAD and not rejected) or (rejected and response is None):
@@ -785,3 +991,30 @@ class GameState:
             raise ValueError("Plots cannot be shared before the beds are planted")
         if "plots_review" in completed and ("plots" not in completed or choices.get("plots") == "needs_first"):
             raise ValueError("A plots decision cannot be reviewed before it is made")
+
+    @staticmethod
+    def _validate_part_two(completed: set[str], flags: set[str], choices: dict[str, str]) -> None:
+        """Part Two follows the first ending, and its preparation, night and recovery keep their order."""
+        present = completed & PART_TWO_IDS
+        if not present:
+            return
+        if "finish" not in completed or "storm_forecast" not in completed:
+            raise ValueError("Part Two needs the first ending and the forecast")
+        done_tasks = [task for task in PREP if task in completed]
+        for task in done_tasks:
+            if not all((item in flags if item in FLAG_NEEDS else item in completed) for item in PREP[task]["needs"]):
+                raise ValueError("A preparation was done before it was possible")
+        if sum(PREP[task]["cost"] for task in done_tasks) > HOURS_TOTAL:
+            raise ValueError("More hours were spent than the day holds")
+        previous = "storm_begin"
+        for scene in SCENES:
+            done = scene in completed
+            if done != (scene in choices):
+                raise ValueError("Inconsistent storm night")
+            if done and previous not in completed:
+                raise ValueError("The storm night is out of order")
+            previous = scene
+        if any(task in completed for task in RECOVER) and "storm_s5" not in completed:
+            raise ValueError("Recovery cannot start before the night is over")
+        if "storm_done" in completed and not (set(RECOVER) <= completed):
+            raise ValueError("Storm Season cannot end before recovery")

@@ -141,14 +141,87 @@ def run(output):
         app.scroll=0
         state,position=load_game(app.slot)
         assert state.to_dict()==app.state.to_dict()
-        app.action("dismiss");app.action("title")
+        # ---- Hillside, the neighbours beyond Riverside, the river survey and Part Two: Storm Season.
+        app.action("dismiss");assert app.mode=="play"
+        for setting in ("large_text","reduced_motion","high_contrast","muted","slow_walk"):app.action("setting:"+setting)
+        assert not any(app.settings[k] for k in ("large_text","reduced_motion","high_contrast","muted","slow_walk"))
+        def go(ident):
+            """Walk there on foot, by the real routes, and interact when close."""
+            target=place(ident)
+            assert any(app.world.walk_to(t) for t in ((target.x,target.y+29),(target.x-30,target.y+8),(target.x+30,target.y+8),(target.x,target.y-25))),ident
+            frames=0
+            while app.world.path and frames<20000:
+                app.update(1/60);frames+=1
+            assert not app.world.path,(ident,"path stalled")
+            assert app.world.player.distance_to((target.x,target.y))<60,(ident,app.world.player)
+            app.interact(target)
+        def pick(choice):
+            app.action("choice:"+choice);assert app.result.ok,(choice,app.result)
+        def meet(ident,choice,shot=None):
+            go(ident);assert app.mode=="dialogue",ident
+            if shot:capture(shot,"dialogue")
+            pick(choice);key(pygame.K_RETURN);assert app.mode=="play",ident
+        app.world.player.update(480,500)
+        meet("kit","kit_1:read","20-kit-meeting")
+        assert app.world.zone() in ("RIVERSIDE","WILLOWMERE","HILLSIDE")
+        for site in ("sample_up","sample_out","sample_down"):
+            go(site);assert app.mode=="result" and len(app.result.outcome)==3,site
+            if site=="sample_out":capture("21-river-reading","result")
+            key(pygame.K_RETURN)
+        meet("noor","noor_1:ask_need")
+        assert app.world.zone()=="HILLSIDE" and app.settings["tip_hillside"]
+        meet("odile","odile_1:sit")
+        # Chapters that unlock as the village changes.
+        go("kit");assert app.state.available_beat("kit").id=="kit_2";pick("kit_2:explain_circle");key(pygame.K_RETURN)
+        go("odile");assert app.state.available_beat("odile").id=="odile_2";pick("odile_2:plant_here");key(pygame.K_RETURN)
+        assert "memory_tree" in app.state.completed
+        go("noor");assert app.state.available_beat("noor").id=="noor_2";pick("noor_2:check_in_rota");key(pygame.K_RETURN)
+        go("quiet_lookout");assert app.mode=="quiet";app.quiet_time=3;capture("22-lookout","quiet")
+        app.action("quiet_reflect");key(pygame.K_RETURN)
+        app.change_mode("journal");app.journal_tab="people";capture("23-journal-neighbours","journal")
+        app.journal_tab="river";capture("24-journal-river","journal");app.journal_tab="story";app.change_mode("play")
+        app.change_mode("map");capture("25-map-hillside","map");app.change_mode("play")
+        # Part Two. The forecast is read at the circle, then the day is planned at the Hall.
+        go("council");assert "storm_forecast" in [c.id for c in app.conversation.choices]
+        pick("storm_forecast");key(pygame.K_RETURN);assert app.state.storm_phase()=="forecast" and app.mode=="play"
+        app.update(1/60);capture("26-forecast-overcast","play")
+        go("storm");assert app.mode=="dialogue";capture("27-storm-planning","dialogue")
+        for task in ("prep_hall","prep_drains","prep_rowan"):
+            pick(task);key(pygame.K_RETURN)
+            assert app.mode=="dialogue" and app.talking_to=="storm",("the planning table should reopen",task,app.mode)
+        assert app.state.prep_hours_left()==1
+        app.action("choice:prep_clinic");assert app.result.ok and app.state.prep_hours_left()==0;key(pygame.K_RETURN)
+        assert app.mode=="dialogue"
+        app.action("choice:prep_odile");assert not app.result.ok;key(pygame.K_RETURN)
+        pick("begin");key(pygame.K_RETURN)
+        assert app.mode=="dialogue" and app.state.storm_scene_pending(),"the night starts by itself"
+        app.update(1/60);capture("28-storm-night","dialogue")
+        for scene_choice in ("doors","elders_first","clinic","sit"):
+            pick(scene_choice)
+            if scene_choice=="elders_first":capture("29-hall-outcome","result")
+            key(pygame.K_RETURN);assert app.mode=="dialogue","the night carries on"
+        pick("dawn");key(pygame.K_RETURN)
+        assert app.mode=="play" and app.state.storm_phase()=="aftermath"
+        app.world.player.update(500,420);app.update(1/60);capture("30-aftermath","play")
+        for ident in ("recover_streets","recover_homes","recover_hall"):
+            go(ident);assert app.mode=="result" and app.result.ok,ident
+            if ident=="recover_homes":capture("31-recovery","result")
+            key(pygame.K_RETURN)
+        go("council");pick("storm_close")
+        assert app.mode=="ending" and app.ending_part==2 and app.state.storm_phase()=="done"
+        capture("32-storm-ending","ending");assert app.max_scroll>0
+        app.scroll=app.max_scroll;capture("33-storm-recap","ending");app.scroll=0
+        assert load_game(app.slot)[0].to_dict()==app.state.to_dict()
+        # A walk across the whole village has used every kind of route: bridge, east path, hillside lane.
+        app.action("dismiss");app.update(1/60);capture("34-after-the-storm","play")
+        app.action("title")
         assert app.save_valid
         app.action("continue");assert "balanced" in app.state.flags
         # Smaller / wider windows keep a letterboxed interface, with correct clicks.
         app.window=pygame.display.set_mode((960,600),pygame.HIDDEN)
         app.draw();app.present()
         assert app.logical_mouse((480,300))==(640,420)
-        report={"ok":True,"reachable_cells":len(seen),"reachable_interactables":len(app.world.places),"metrics":state.metrics,"resources":state.resources,"background_music":music,"captures":captures,"checks":["real keyboard UI flow","all locations reachable","A* walking and bridge collision","empathetic conversations","finite resources","environment restoration","quiet reflection without waiting","journal and map","all accessibility settings","resident scenes and de-escalation","garden plot dilemma with outcome panels","extra quiet places","residents walk to their posts","ending recap and epilogue","balance ending through council","background music loads and loops","save and continue","window resize and coordinate mapping"]}
+        report={"ok":True,"reachable_cells":len(seen),"reachable_interactables":len(app.world.places),"metrics":state.metrics,"resources":state.resources,"background_music":music,"captures":captures,"checks":["real keyboard UI flow","all locations reachable","A* walking and bridge collision","empathetic conversations","finite resources","environment restoration","quiet reflection without waiting","journal and map","all accessibility settings","resident scenes and de-escalation","garden plot dilemma with outcome panels","extra quiet places","residents walk to their posts","ending recap and epilogue","balance ending through council","background music loads and loops","Hillside, new neighbours and the river survey","Part Two: planning, the storm night, recovery and recap","weather, rain and storm scenery","save and continue","window resize and coordinate mapping"]}
         (output/"verification.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
         app.close()
         print(json.dumps(report,indent=2))

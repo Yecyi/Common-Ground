@@ -24,7 +24,7 @@ supplied as templates, named like `player_left_1_polluted.png`.
 The WAV files are quiet mono 22050 Hz 16-bit PCM and loop seamlessly. Nine are
 supplied: `wind`, `harmony`, `birds`, `chime`, `machinery` (heard near the mill),
 `river_murky` and `river_clear` (the river, before and after the repair), `drone`
-(tense conversations) and `melody` (as balance rises). Quiet places raise the
+(tense conversations), `melody` (as balance rises) and `rain` (the storm and its aftermath). Quiet places raise the
 ambience and soften the music. Sound is optional and never signals information
 that is missing from the visual interface.
 

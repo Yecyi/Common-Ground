@@ -62,8 +62,10 @@ class Art:
     NAMES = ("player", "mira", "rowan", "amani", "theo", "tree", "house",
              "workshop", "pump", "litter", "crate", "plot", "bench",
              "noticeboard", "flower", "rock", "deadtree", "sign", "rope",
-             "flood", "soot", "dispute", "plot_seed", "plot_sprout")
-    PEOPLE = ("player", "mira", "rowan", "amani", "theo")
+             "flood", "soot", "dispute", "plot_seed", "plot_sprout",
+             "kit", "odile", "noor", "clinic", "hall", "cottage", "sample",
+             "sandbags", "cots", "debris", "orchard_seed", "orchard_young", "orchard")
+    PEOPLE = ("player", "mira", "rowan", "amani", "theo", "kit", "odile", "noor")
     FACINGS = ("down", "up", "left", "right")
 
     def __init__(self, custom_dir=None):
@@ -158,13 +160,16 @@ class Art:
         pygame.draw.ellipse(s, (30, 41, 37, 65), (3, 29, 19, 6))
         coats = {"player": (56, 137, 136), "mira": (192, 104, 85),
                  "rowan": (116, 143, 99), "amani": (207, 161, 73),
-                 "theo": (102, 117, 153)}
+                 "theo": (102, 117, 153), "kit": (96, 160, 196),
+                 "odile": (146, 104, 150), "noor": (210, 228, 222)}
         skin = {"player": (213, 166, 119), "mira": (183, 126, 92),
                 "rowan": (224, 178, 137), "amani": (135, 91, 65),
-                "theo": (198, 143, 106)}[name]
+                "theo": (198, 143, 106), "kit": (192, 142, 108),
+                "odile": (214, 176, 140), "noor": (152, 106, 76)}[name]
         hair = {"player": (53, 60, 53), "mira": (68, 54, 49),
                 "rowan": (152, 144, 120), "amani": (49, 47, 44),
-                "theo": (78, 60, 48)}[name]
+                "theo": (78, 60, 48), "kit": (38, 34, 46),
+                "odile": (228, 228, 224), "noor": (36, 32, 34)}[name]
         c = coats[name]
         resident = name != "player"
         if resident:
@@ -228,6 +233,27 @@ class Art:
             rect(s, (213, 173, 94), (8, 1 + hy, 10, 4))
             rect(s, (58, 73, 91), (9, 18, 7, 10))
             rect(s, (190, 191, 167), (10, 21, 5, 2))
+        elif name == "kit":
+            # A hooded teenager with a backpack and the notebook full of river readings.
+            rect(s, (132, 186, 214), (5, 13, 15, 4), 2)
+            rect(s, (60, 70, 90), (7, 16, 2, 10))
+            rect(s, (232, 196, 80), (2, 22, 4, 6))
+            rect(s, hair, (6, 2 + hy, 13, 4), 2)
+        elif name == "odile":
+            # An elder in a shawl, with a white bun and a walking stick.
+            rect(s, (122, 78, 128), (5, 15, 15, 5), 2)
+            rect(s, (200, 170, 200), (6, 19, 1, 3))
+            rect(s, (200, 170, 200), (18, 19, 1, 3))
+            rect(s, hair, (9, 0 + hy, 7, 4), 2)
+            pygame.draw.line(s, (110, 84, 56), (22, 20), (22, 33), 2)
+        elif name == "noor":
+            # A community nurse: scrubs, a lanyard with a green cross, and a stethoscope.
+            rect(s, (80, 170, 150), (12, 15, 1, 4))
+            rect(s, (80, 170, 150), (10, 19, 5, 4))
+            rect(s, (240, 250, 245), (12, 19, 1, 3))
+            rect(s, (240, 250, 245), (11, 20, 3, 1))
+            pygame.draw.line(s, (60, 70, 70), (9, 16), (11, 22), 1)
+            rect(s, hair, (6, 2 + hy, 13, 5), 2)
         return s
 
     def _make_sprite(self, name, restored):
@@ -388,6 +414,125 @@ class Art:
             for box in ((6, 2, 6, 4), (4, 5, 4, 5), (10, 5, 4, 5), (6, 9, 6, 3)):
                 rect(s, petals, box)
             rect(s, (158, 113, 65), (8, 6, 2, 3))
+            return s
+        if name == "clinic":
+            # The health post: the house, cooler and cleaner, under a green cross.
+            s = self._make_sprite("house", restored).copy()
+            s.fill((205, 238, 232, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            rect(s, (232, 244, 238), (48, 40, 32, 18), 2)
+            rect(s, (70, 160, 132), (62, 42, 4, 14))
+            rect(s, (70, 160, 132), (57, 47, 14, 4))
+            return s
+        if name == "hall":
+            s = new((176, 128))
+            pygame.draw.ellipse(s, (39, 50, 41, 55), (6, 106, 164, 18))
+            wall = (226, 206, 158) if restored else (190, 183, 152)
+            roof = (150, 98, 72) if restored else (128, 112, 90)
+            rect(s, (90, 89, 68), (12, 54, 152, 66))
+            rect(s, wall, (15, 56, 146, 62))
+            rect(s, (164, 144, 105), (15, 106, 146, 12))
+            pygame.draw.polygon(s, INK, [(2, 60), (28, 20), (148, 20), (174, 60)])
+            pygame.draw.polygon(s, roof, [(5, 57), (30, 23), (146, 23), (171, 57)])
+            for y in (30, 40, 50):
+                pygame.draw.line(s, tuple(max(0, v - 25) for v in roof), (34 - (y - 23) // 2, y), (142 + (y - 23) // 2, y), 2)
+            rect(s, (92, 86, 70), (78, 2, 22, 28))
+            rect(s, wall, (80, 4, 18, 24))
+            pygame.draw.polygon(s, roof, [(74, 8), (89, 0), (104, 8)])
+            pygame.draw.circle(s, (197, 153, 74), (89, 16), 4)
+            for x in (28, 54, 108, 134):
+                rect(s, (92, 100, 80), (x - 2, 68, 18, 24))
+                rect(s, (121, 176, 168) if restored else (128, 153, 143), (x, 70, 14, 20))
+                rect(s, (228, 210, 161), (x + 6, 70, 2, 20))
+                rect(s, (228, 210, 161), (x, 79, 14, 2))
+                if restored:
+                    rect(s, (82, 132, 78), (x - 2, 91, 18, 4), 2)
+            rect(s, (79, 85, 73), (74, 82, 28, 38))
+            rect(s, (122, 110, 75), (77, 85, 22, 35))
+            rect(s, (74, 62, 44), (87, 85, 2, 35))
+            rect(s, (222, 211, 174), (68, 118, 40, 4))
+            rect(s, (183, 172, 139), (64, 121, 48, 3))
+            return s
+        if name == "cottage":
+            s = new((104, 92))
+            pygame.draw.ellipse(s, (39, 50, 41, 55), (4, 76, 96, 13))
+            wall = (232, 210, 170) if restored else (190, 182, 152)
+            roof = (176, 104, 80) if restored else (132, 113, 90)
+            rect(s, (90, 89, 68), (12, 34, 70, 48))
+            rect(s, wall, (14, 36, 66, 44))
+            pygame.draw.polygon(s, INK, [(6, 40), (24, 12), (72, 12), (90, 40)])
+            pygame.draw.polygon(s, roof, [(9, 38), (26, 14), (70, 14), (87, 38)])
+            rect(s, (92, 86, 70), (58, 2, 10, 16))
+            for x in (18, 62):
+                rect(s, (92, 100, 80), (x - 1, 50, 16, 16))
+                rect(s, (121, 176, 168) if restored else (128, 153, 143), (x, 51, 14, 14))
+                rect(s, (228, 210, 161), (x + 6, 51, 2, 14))
+            rect(s, (79, 85, 73), (36, 54, 18, 28))
+            rect(s, (122, 110, 75), (38, 56, 14, 26))
+            rect(s, roof, (80, 48, 22, 4))
+            for x in (82, 98):
+                rect(s, (112, 95, 65), (x, 52, 3, 30))
+            rect(s, (150, 116, 77), (84, 68, 14, 3))
+            rect(s, (66, 80, 64), (86, 71, 2, 10))
+            rect(s, (66, 80, 64), (95, 71, 2, 10))
+            return s
+        if name == "sample":
+            # A river sampling post: a jar on a stake, clear or murky depending on the water.
+            s = new((28, 40))
+            pygame.draw.ellipse(s, (33, 43, 35, 55), (2, 32, 24, 6))
+            rect(s, (112, 95, 65), (12, 8, 4, 28))
+            rect(s, (197, 153, 74), (7, 4, 14, 5), 1)
+            rect(s, (222, 232, 226), (16, 18, 9, 13), 2)
+            rect(s, (120, 190, 200) if restored else (126, 130, 100), (17, 21, 7, 9), 1)
+            rect(s, (112, 95, 65), (16, 16, 9, 3))
+            return s
+        if name == "sandbags":
+            s = new((48, 24))
+            pygame.draw.ellipse(s, (33, 43, 35, 55), (2, 17, 44, 6))
+            for row, count in enumerate((4, 3, 2)):
+                for i in range(count):
+                    x, y = 4 + i * 11 + row * 5, 14 - row * 6
+                    pygame.draw.ellipse(s, (130, 108, 72), (x, y, 12, 8))
+                    pygame.draw.ellipse(s, (176, 150, 104), (x + 1, y, 10, 6))
+                    rect(s, (130, 108, 72), (x + 3, y + 3, 6, 1))
+            return s
+        if name == "cots":
+            s = new((64, 28))
+            pygame.draw.ellipse(s, (33, 43, 35, 55), (2, 21, 60, 6))
+            for i, blanket in enumerate(((96, 142, 164), (196, 140, 96), (140, 170, 110))):
+                x = 2 + i * 21
+                rect(s, (110, 96, 76), (x, 12, 18, 10), 1)
+                rect(s, blanket, (x + 1, 13, 16, 7), 1)
+                rect(s, (240, 230, 205), (x + 1, 13, 5, 4), 1)
+            return s
+        if name == "debris":
+            # Branches, leaves and a broken plank left by the storm.
+            s = new((44, 26))
+            pygame.draw.ellipse(s, (40, 46, 39, 45), (2, 18, 40, 7))
+            for a, b in (((4, 18), (22, 8)), ((10, 20), (36, 12)), ((8, 14), (30, 20))):
+                pygame.draw.line(s, (96, 80, 56), a, b, 2)
+            rect(s, (150, 120, 80), (14, 14, 18, 4))
+            rect(s, (110, 90, 58), (30, 16, 8, 3))
+            for x, y, c in ((8, 12, (110, 130, 76)), (20, 6, (150, 140, 70)), (30, 10, (110, 130, 76)), (16, 16, (170, 150, 80))):
+                rect(s, c, (x, y, 5, 3), 1)
+            rect(s, (92, 130, 158), (24, 18, 9, 5), 1)
+            return s
+        if name in ("orchard_seed", "orchard_young", "orchard"):
+            # A short row of trees planted in memory: three stages of growth.
+            s = new((96, 56))
+            pygame.draw.ellipse(s, (33, 53, 40, 55), (4, 46, 88, 8))
+            height = {"orchard_seed": 6, "orchard_young": 16, "orchard": 26}[name]
+            for x in (16, 48, 80):
+                rect(s, (92, 76, 52), (x - 2, 48 - height, 4, height))
+                if name == "orchard_seed":
+                    rect(s, (110, 150, 82), (x - 3, 42, 6, 3), 1)
+                    rect(s, (150, 130, 90), (x - 4, 47, 8, 2))
+                elif name == "orchard_young":
+                    pygame.draw.ellipse(s, (82, 132, 82), (x - 8, 48 - height - 10, 16, 13))
+                else:
+                    pygame.draw.ellipse(s, (66, 118, 76), (x - 14, 48 - height - 16, 28, 22))
+                    pygame.draw.ellipse(s, (96, 152, 90), (x - 10, 48 - height - 15, 16, 10))
+                    for dx, dy in ((-7, -4), (6, -8), (1, -2)):
+                        rect(s, (214, 86, 70), (x + dx, 48 - height - 10 + dy, 3, 3))
             return s
         if name == "deadtree":
             s = new((64, 80))

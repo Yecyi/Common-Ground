@@ -85,7 +85,7 @@ class ResidentSceneTests(unittest.TestCase):
         play_all_beats(state)
         self.assertEqual(state.resources["supplies"], supplies)
         before = state.to_dict()
-        for beat in BEATS:
+        for beat in (b for b in BEATS if b.person in ("rowan", "mira", "amani", "theo")):
             result = state.choose(beat.person, f"{beat.id}:{first_good(beat).id}")
             self.assertFalse(result.ok, beat.id)
         self.assertEqual(state.to_dict(), before)
@@ -441,10 +441,10 @@ class SaveVersionTests(unittest.TestCase):
         original = deepcopy(data)
         loaded = GameState.from_dict(data)
         self.assertEqual(data, original, "loading must not modify the caller's data")
-        self.assertEqual(loaded.SAVE_VERSION, 2)
+        self.assertEqual(loaded.SAVE_VERSION, 3)
         self.assertEqual(loaded.completed, state.completed)
         self.assertEqual(loaded.metrics, state.metrics)
-        self.assertEqual(loaded.to_dict()["version"], 2)
+        self.assertEqual(loaded.to_dict()["version"], 3)
         self.assertEqual({g for g in GARDEN_IDS}, set(loaded.planted_at))
         self.assertTrue(all(loaded.garden_stage(g) == 3 for g in GARDEN_IDS))
 

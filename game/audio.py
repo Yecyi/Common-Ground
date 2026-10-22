@@ -22,10 +22,10 @@ MUSIC_TYPES = (".mp3", ".ogg", ".wav", ".flac")
 RATE = 22050
 # The mixer runs at CD rate so a music track keeps its top end; the generated sounds are resampled.
 MIXER_RATE = 44100
-TRACKS = ("wind", "harmony", "birds", "chime", "machinery", "river_murky", "river_clear", "drone", "melody")
+TRACKS = ("wind", "harmony", "birds", "chime", "machinery", "river_murky", "river_clear", "drone", "melody", "rain")
 # Channel 3 is reserved for the short acknowledgement chime.
 LAYER_CHANNELS = {"wind": 0, "harmony": 1, "birds": 2, "machinery": 4,
-                  "river_murky": 5, "river_clear": 6, "drone": 7, "melody": 8}
+                  "river_murky": 5, "river_clear": 6, "drone": 7, "melody": 8, "rain": 10}
 CHIME_CHANNEL = 3
 BGM_CHANNEL = 9
 # The supplied track is mastered loudly (RMS about 0.18), so it plays well below full volume.
@@ -75,6 +75,13 @@ def _track(name, seconds=4.0):
             slow = slow * .965 + noise * .035
             bubble = .010 * math.sin(tau * (600 + 150 * math.sin(tau * 3 * t)) * t) * max(0.0, math.sin(tau * 2 * t)) ** 8
             v = (fast - slow) * .32 + bubble
+        elif name == "rain":
+            # Rain on roofs and leaves: bright hiss with the low rumble taken out, and the odd heavier drop.
+            noise = rng.uniform(-1, 1)
+            fast = fast * .55 + noise * .45
+            slow = slow * .93 + noise * .07
+            drops = .02 * max(0.0, math.sin(tau * 7.3 * t + 3 * math.sin(tau * 1.1 * t))) ** 12 * rng.uniform(-1, 1)
+            v = (fast - slow) * .30 + drops
         elif name == "drone":
             # A soft low beating pair; whole-number frequencies keep the four-second loop seamless.
             v = (.030 * math.sin(tau * 98 * t) + .024 * math.sin(tau * 103 * t) + .014 * math.sin(tau * 146.5 * t))
@@ -208,7 +215,7 @@ class Audio:
         """After a supportive choice the music swells gently for a while as the tension eases."""
         self.settle = 1.0
 
-    def levels(self, health, quiet=False, tension=0.0, zones=None, mill_shared=False):
+    def levels(self, health, quiet=False, tension=0.0, zones=None, mill_shared=False, weather="clear"):
         """Target volume for every layer. Quiet places raise the ambience and soften the music.
 
         With a background track, it carries the music: it ducks while a conversation is tense
@@ -219,19 +226,23 @@ class Audio:
         ambient = 1.25 if quiet else 1.0
         music = .4 if quiet else 1.0
         synthesized = not self.bgm_active
+        storm = weather == "storm"
+        # Weather: steady rain in the storm, a light patter before it and drips after it.
+        rain = {"storm": .55, "overcast": .14, "aftermath": .12}.get(weather, 0.0) * ambient
         return {
-            "wind": (1 - self.mix) * .42 * ambient,
+            "wind": min(1.0, (1 - self.mix) * .42 * ambient + (.28 if storm else 0.0)),
             "harmony": (.15 + self.mix * .60 + .35 * self.settle) * music if synthesized else 0.0,
-            "birds": self.mix * .5 * ambient * (.35 + .65 * zones.get("trees", .5)),
+            "birds": 0.0 if storm else self.mix * .5 * ambient * (.35 + .65 * zones.get("trees", .5)),
+            "rain": rain,
             "machinery": .45 * zones.get("mill", 0) * (.4 if mill_shared else 1.0) * ambient,
             "river_murky": .42 * zones.get("river", 0) * (1 - self.river_clear) * ambient,
             "river_clear": .42 * zones.get("river", 0) * self.river_clear * ambient,
             "drone": .34 * self.tension * music if synthesized else 0.0,
             "melody": .40 * clamp((health - .55) / .30) * music if synthesized else 0.0,
-            "bgm": 0.0 if synthesized else BGM_VOLUME * (.45 if quiet else 1.0) * (1 - .4 * self.tension) + .08 * self.settle,
+            "bgm": 0.0 if synthesized else BGM_VOLUME * (.45 if quiet else 1.0) * (.75 if storm else 1.0) * (1 - .4 * self.tension) + .08 * self.settle,
         }
 
-    def update(self, dt, health, quiet=False, tension=0.0, zones=None, repaired=False, mill_shared=False):
+    def update(self, dt, health, quiet=False, tension=0.0, zones=None, repaired=False, mill_shared=False, weather="clear"):
         if not self.available:
             return
         dt = max(0.0, dt)
@@ -239,7 +250,7 @@ class Audio:
         self.tension += (clamp(tension) - self.tension) * min(1.0, dt * 1.2)
         self.settle = max(0.0, self.settle - dt / 6)
         self.river_clear += ((1.0 if repaired else 0.0) - self.river_clear) * min(1.0, dt * .4)
-        levels = self.levels(health, quiet, tension, zones, mill_shared)
+        levels = self.levels(health, quiet, tension, zones, mill_shared, weather)
         for name, channel in self.channels.items():
             channel.set_volume(0 if self.muted else clamp(levels[name]))
 

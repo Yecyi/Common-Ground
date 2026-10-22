@@ -11,7 +11,8 @@ import pygame
 from .art import Art
 from .audio import Audio
 from .state import GameState
-from .story import OUTCOME_WORDS
+from .story import OUTCOME_WORDS, SURVEY_LABELS, SURVEY_SITES
+from .storm import HOURS_TOTAL
 from .storage import load_game,save_game,load_settings,write_json
 from .ui import UI,INK,MUTED,PAPER,CREAM,GREEN,GOLD,WHITE
 from .world import World,VIEW,WIDTH,HEIGHT
@@ -26,6 +27,7 @@ VITALS=(("environment","ENVIRONMENT",(63,118,81),70),
 QUIET_TEXT={
     "quiet":("THE WILLOW REFUGE","There is room to pause.","Notice a sound, a colour, or the ground beneath your feet. You can breathe at your own pace, or simply sit. There is no correct way to take this moment."),
     "quiet_river":("THE RIVER BANK","Let the water do the moving.","Watch the river for a while: its colour, its speed, what it carries. Nothing here needs fixing right now, and you do not have to feel any particular way."),
+    "quiet_lookout":("THE LOOKOUT","The whole valley, at once.","Look back over the roofs, the river and the hill. Notice what has changed since you arrived, and what has not. You can stay as long as you like."),
     "quiet_garden":("ABOVE THE GARDEN","Things grow without being hurried.","Look across the beds. Notice what is planted, what is still bare, and how little needs to happen in this moment."),
 }
 GAMEPAD_KEYS={0:pygame.K_RETURN,1:pygame.K_ESCAPE,2:pygame.K_j,3:pygame.K_TAB,7:pygame.K_ESCAPE}
@@ -68,6 +70,11 @@ class App:
         self.toast_time=0.
         self.quiet_time=0.
         self.quiet_place=None
+        self.ending_part=1
+        self.journal_tab="story"
+        self.map_markers=[]
+        self.last_zone=None
+        self.chain=False
         self.save_clock=0.
         self.fullscreen=False
         self.focused=True
@@ -226,28 +233,43 @@ class App:
             except OSError:self.notify("Settings apply for this session; they could not be saved.")
         elif action=="dismiss":
             came_from_result=self.mode=="result" and self.result is not None and self.result.ok
+            chain=self.mode=="result" and self.chain and self.state.storm_phase() in ("forecast","night")
             self.change_mode("play")
-            if came_from_result:self.tip("tip_journal","Your journal (J) keeps a record of your choices and goals.")
+            if chain:
+                # The planning table, or the next part of the night, opens by itself: the storm does not wait.
+                self.talking_to="storm";self.conversation=self.state.dialogue("storm");self.change_mode("dialogue")
+            elif came_from_result:self.tip("tip_journal","Your journal (J) keeps a record of your choices and goals.")
+            self.chain=False
         elif action=="leave_dialogue":self.change_mode("play")
         elif action.startswith("choice:"):
             choice=action.split(":",1)[1]
             self.result=self.state.choose(self.talking_to,choice)
+            self.chain=self.talking_to=="storm"
             self.save()
             if self.audio and self.result.ok:
                 self.audio.chime()
                 if self.result.resolved:self.audio.resolve()
             if choice=="finish" and self.result.ok:
+                self.ending_part=1
+                self.change_mode("ending")
+            elif choice=="storm_close" and self.result.ok:
+                self.ending_part=2
                 self.change_mode("ending")
             else:self.change_mode("result")
         elif action=="quiet_reflect":
             self.result=self.state.perform(self.quiet_place.id if self.quiet_place else "quiet")
+            self.chain=False
             self.save()
             if self.audio:self.audio.chime()
             self.change_mode("result")
         elif action=="finish":
             self.result=self.state.perform("finish")
+            self.ending_part=1
             self.save()
             self.change_mode("ending" if self.result.ok else "result")
+        elif action.startswith("tab:"):
+            self.journal_tab=action.split(":",1)[1]
+            self.scroll=0
         elif action=="journal":self.change_mode("journal")
         elif action=="map":self.change_mode("map")
         elif action.startswith("travel:"):
@@ -273,6 +295,7 @@ class App:
             self.change_mode("quiet")
         else:
             self.result=self.state.perform(place.id)
+            self.chain=False
             self.save()
             if self.audio and self.result.ok:self.audio.chime()
             self.change_mode("result")
@@ -324,6 +347,9 @@ class App:
             pos=self.logical_mouse(event.pos)
             action=self.ui.clicked(pos)
             if action:self.action(action)
+            elif self.mode=="map":
+                hit=next((a for center,a in self.map_markers if math.dist(center,pos)<=14),None)
+                if hit:self.action(hit)
             elif self.mode=="play" and VIEW.collidepoint(pos):
                 point=self.world.screen_to_world(pos)
                 place=self.world.object_at(point,self.state)
@@ -359,6 +385,10 @@ class App:
                 self.change_mode("play");return
             if key in (pygame.K_PAGEUP,pygame.K_PAGEDOWN):
                 self.scroll=max(0,min(self.max_scroll,self.scroll+(400 if key==pygame.K_PAGEDOWN else -400)));return
+            if self.mode=="journal" and key in (pygame.K_LEFT,pygame.K_RIGHT):
+                tabs=("story","people","river")
+                self.journal_tab=tabs[(tabs.index(self.journal_tab)+(1 if key==pygame.K_RIGHT else -1))%len(tabs)]
+                self.scroll=0;return
             if self.mode=="dialogue" and pygame.K_1<=key<=pygame.K_9:
                 index=key-pygame.K_1
                 if index<len(self.conversation.choices):self.action("choice:"+self.conversation.choices[index].id)
@@ -386,11 +416,15 @@ class App:
                 if self.world.player.distance_to((place.x,place.y))<58:self.interact(place)
             if self.world.nearest and self.toast_time<=0 and self.settings.get("tip_move"):
                 self.tip("tip_talk","Press E or Space to talk to someone, or to look at what is near you.")
+            zone=self.world.zone()
+            if zone=="HILLSIDE" and self.last_zone!="HILLSIDE" and self.toast_time<=0:
+                self.tip("tip_hillside","Hillside: more neighbours live out here. Nothing here is required, but it changes how the story ends.")
+            self.last_zone=zone
         elif self.mode=="quiet":self.quiet_time+=dt
         if self.audio:
             tension=self.conversation.tension if self.mode=="dialogue" and self.conversation else 0.
             self.audio.update(dt,self.state.balance,self.mode=="quiet",tension,self.world.audio_zones(),
-                              "source_repaired" in self.state.flags,"factory_shared" in self.state.flags)
+                              "source_repaired" in self.state.flags,"factory_shared" in self.state.flags,self.state.weather())
 
     # ---------------------------------------------------------------- the HUD
     def draw_hud(self):
@@ -422,6 +456,9 @@ class App:
             u.text(near.name,(70,758),23,INK,True)
             verb="Talk" if near.kind in ("npc","council") else "Pause & reflect" if near.kind=="quiet" else "Interact"
             if near.id=="plots":verb="Read the sign-up list"
+            elif near.id=="storm":verb="Read the storm board"
+            elif near.id.startswith("sample_"):verb="Take a river reading"
+            elif near.id.startswith("recover_"):verb="Help clear up"
             u.text(verb,(70,792),17,MUTED)
         elif caption:
             u.text("NOTICE",(28,757),13,GREEN,True)
@@ -438,7 +475,12 @@ class App:
             pygame.draw.rect(s,(32,54,47),(26,128,285,37),border_radius=6)
             u.text(zone,(41,134),17,WHITE,True)
             text,target=self.step
-            if "balanced" not in state.flags:
+            if state.storm_phase()=="forecast":
+                label=f"DAYLIGHT  {state.prep_hours_left()} OF {HOURS_TOTAL} HOURS"
+                width=u.font(15,True).size(label)[0]+36
+                pygame.draw.rect(s,PAPER,(1253-width,128,width,34),border_radius=6)
+                u.text(label,(1253-width+18,136),15,INK,True)
+            if text:
                 lines=u.lines(text,360,17)
                 height=34+len(lines)*(u.font(17).get_linesize()+1)
                 pygame.draw.rect(s,PAPER,(26,176,390,height),border_radius=8)
@@ -620,7 +662,7 @@ class App:
     def draw_journal(self):
         u=self.ui
         self.modal_header("PEOPLE, PLACE & POSSIBILITY","Your field journal",(100,58,1080,720))
-        # Left column stays fixed while the reflection log scrolls independently.
+        # Left column stays fixed while the right column scrolls independently.
         u.text("WORKING TOWARDS BALANCE",(136,181),16,GREEN,True)
         for i,(key,label) in enumerate((("environment","Environment"),("equity","Equity"),("resilience","Resilience"))):
             x=136+i*126
@@ -628,50 +670,97 @@ class App:
             u.text(label,(x,249),13,MUTED)
         y=290
         concise=["Repair the river pump","Plant all 3 garden beds","Work with all 4 neighbours","Share supplies at the circle","Pause in the willow refuge","Environment reaches 70","Equity reaches 65","Resilience reaches 65"]
+        reached="balanced" in self.state.flags
         for text,(_,done) in zip(concise,self.state.objectives()):
+            # Once the first ending is reached the goals stay ticked, even if the storm later lowers a value.
+            done=done or reached
             pygame.draw.circle(self.surface,GREEN if done else (185,193,174),(146,y+11),8,0 if done else 2)
             y=u.paragraph(text,(167,y),330,18,INK if done else MUTED,gap=2)+18
         pygame.draw.line(self.surface,(211,216,196),(526,184),(526,705))
-        u.text("CHOICES & REFLECTIONS",(562,181),16,GREEN,True)
+        for i,(key,label) in enumerate((("story","Choices"),("people","Neighbours"),("river","River"))):
+            u.button(label,(556+i*164,164,156,38),"tab:"+key,primary=self.journal_tab==key,size=18)
         clip=pygame.Rect(556,219,580,469)
         previous=self.surface.get_clip();self.surface.set_clip(clip)
         y=223-self.scroll
-        entries=list(reversed(self.state.journal))
-        if not entries:
-            y=u.paragraph("A journey begins with a conversation. Find Mira near the crossroads; your discoveries will appear here.",(563,y),557,22,MUTED)
-        for entry in entries:
-            y=u.paragraph(entry["title"],(563,y),550,21,INK,True,gap=3)+7
-            y=u.paragraph(entry["body"],(563,y),550,19,MUTED,gap=4)+26
+        if self.journal_tab=="people":y=self.draw_neighbours(y)
+        elif self.journal_tab=="river":y=self.draw_river(y)
+        else:
+            entries=list(reversed(self.state.journal))
+            if not entries:
+                y=u.paragraph("A journey begins with a conversation. Find Mira near the crossroads; your discoveries will appear here.",(563,y),557,22,MUTED)
+            for entry in entries:
+                y=u.paragraph(entry["title"],(563,y),550,21,INK,True,gap=3)+7
+                y=u.paragraph(entry["body"],(563,y),550,19,MUTED,gap=4)+26
         self.max_scroll=max(0,y+self.scroll-clip.bottom)
         self.surface.set_clip(previous)
-        u.text("Wheel / Page Up & Down to read the journal",(562,699),15,MUTED)
+        u.text("Wheel / Page Up & Down to scroll   Left / Right to change page",(562,699),15,MUTED)
         u.button("Return to the village",(136,724,1008,39),"dismiss",primary=True)
+
+    def draw_neighbours(self,y):
+        """Everyone you can meet, how far each friendship has grown, and what comes next."""
+        u=self.ui
+        for card in self.state.neighbour_cards():
+            u.text(card["name"],(563,y),21,INK,True)
+            u.text(card["role"],(563+u.font(21,True).size(card["name"])[0]+12,y+4),15,MUTED)
+            u.text("BOND" if card["met"] else "NOT MET",(1012,y+4),13,MUTED,True,"topright")
+            for pip in range(3):
+                pygame.draw.circle(self.surface,GREEN,(1030+pip*22,y+13),8,0 if pip<card["bond"] else 2)
+            y=u.paragraph(card["note"],(563,y+30),550,18,MUTED,gap=2)+22
+        return y
+
+    def draw_river(self,y):
+        """Kit's three sampling posts, read as words and pips so colour is never the only signal."""
+        u=self.ui;state=self.state
+        if "support_kit" not in state.completed:
+            return u.paragraph("Kit tests the river from its east bank, where Riverside meets Hillside. Meet them to start the river survey, and the readings will appear here.",(563,y),550,20,MUTED)
+        for site,ident in (("up","sample_up"),("out","sample_out"),("down","sample_down")):
+            label=SURVEY_SITES[site][0]
+            u.text(label,(563,y),21,INK,True)
+            if ident not in state.completed:
+                u.text("Not read yet",(1136,y+4),16,MUTED,False,"topright")
+                y+=44
+                continue
+            y+=32
+            for name,level in zip(SURVEY_LABELS,state.river_reading(site)):
+                u.text(name,(583,y),17,INK)
+                for pip in range(3):
+                    pygame.draw.circle(self.surface,GREEN,(820+pip*22,y+11),7,0 if pip<level else 2)
+                u.text(OUTCOME_WORDS[level],(895,y),17,INK,True)
+                y+=26
+            y+=18
+        return u.paragraph("Readings change as the village does. Come back after a decision to see what it did to the water.",(563,y),550,17,MUTED)
 
     def draw_map(self):
         u=self.ui
-        self.modal_header("CLICK A PLACE TO WALK THERE","Willowmere",(100,55,1080,728))
-        rect=pygame.Rect(140,185,664,493)
+        self.modal_header("CLICK A PLACE, OR A NUMBER, TO WALK THERE","Willowmere and Hillside",(100,55,1080,728))
+        rect=pygame.Rect(140,185,780,369)
         mini=self.world.backgrounds[1 if self.state.balance>=.55 else 0].copy()
         for name,x,y in self.world.decor:
             sprite=self.art.sprite(name,self.state.balance>=.55)
             mini.blit(sprite,(x-sprite.get_width()//2,y-sprite.get_height()))
-        self.surface.blit(pygame.transform.scale(mini,rect.size),rect)
+        self.surface.blit(pygame.transform.smoothscale(mini,rect.size),rect)
         pygame.draw.rect(self.surface,(174,188,159),rect,2,border_radius=3)
-        items=[("Mira / community","mira"),("Rowan / garden","rowan"),("Amani / Riverside","amani"),("Theo / old mill","theo"),("Neighbourhood circle","council"),("Neighbours arguing","dispute"),("Garden sign-up board","plots"),("River pump","pump"),("Willow refuge","quiet"),("River bank bench","quiet_river"),("Garden overlook","quiet_garden")]
+        items=[("Mira / community","mira"),("Rowan / garden","rowan"),("Amani / Riverside","amani"),("Theo / old mill","theo"),
+               ("Neighbourhood circle","council"),("Neighbours arguing","dispute"),("Garden sign-up board","plots"),("River pump","pump"),
+               ("Willow refuge","quiet"),("River bank bench","quiet_river"),("Garden overlook","quiet_garden"),
+               ("Kit / river watcher","kit"),("Noor / health post","noor"),("Odile / the orchard","odile"),("The Lookout","quiet_lookout"),
+               ("Storm board at the Hall","storm"),("Storm debris in the square","recover_streets"),("Flooded Riverside homes","recover_homes"),("The Hall after the night","recover_hall")]
         places={p.id:p for p in self.world.places}
         items=[(label,ident) for label,ident in items if not self.world.hidden(places[ident],self.state)]
-        step=min(68,470//len(items))
+        step=min(30,490//len(items))
+        self.map_markers=[]
         for i,(label,ident) in enumerate(items):
             p=places[ident]
             x=rect.x+p.x/WIDTH*rect.w;y=rect.y+p.y/HEIGHT*rect.h
-            pygame.draw.circle(self.surface,GREEN,(round(x),round(y)),12)
-            u.text(i+1,(x,y),15,WHITE,True,"center")
-            u.button(f"{i+1}  {label}",(831,185+i*step,307,step-8),"travel:"+ident)
+            pygame.draw.circle(self.surface,GREEN,(round(x),round(y)),10)
+            u.text(i+1,(x,y),13,WHITE,True,"center")
+            self.map_markers.append(((round(x),round(y)),"travel:"+ident))
+            u.button(f"{i+1}  {label}",(940,185+i*step,198,step-4),"travel:"+ident,size=15)
         px=rect.x+self.world.player.x/WIDTH*rect.w;py=rect.y+self.world.player.y/HEIGHT*rect.h
-        pygame.draw.circle(self.surface,GOLD,(round(px),round(py)),9)
-        pygame.draw.circle(self.surface,WHITE,(round(px),round(py)),10,2)
-        u.text("YOU",(px,py+15),14,INK,True,"midtop")
-        u.text("Cross the bridge to reach Riverside. Every neighbour has something to offer.",(142,692),18,MUTED)
+        pygame.draw.circle(self.surface,GOLD,(round(px),round(py)),8)
+        pygame.draw.circle(self.surface,WHITE,(round(px),round(py)),9,2)
+        u.text("YOU",(px,py+13),13,INK,True,"midtop")
+        u.paragraph("Cross the bridge to reach Riverside, and keep going east to reach Hillside. Every neighbour has something to offer, and some of them are further than they look.",(142,572),760,18,MUTED)
         u.button("Return to the village",(140,727,998,40),"dismiss",primary=True)
 
     def draw_recap_row(self,row,y):
@@ -696,26 +785,35 @@ class App:
         return y+total+12
 
     def draw_ending(self):
-        u=self.ui
-        self.modal_header("A BEGINNING YOU MADE TOGETHER","Common ground, found.",(120,70,1040,700))
+        u=self.ui;state=self.state
+        part2=self.ending_part==2
+        if part2:
+            self.modal_header("STORM SEASON, AND AFTER","The morning after.",(120,70,1040,700))
+            paragraphs,rows,heading=state.storm_epilogue(),state.storm_recap(),"WHAT THE STORM TESTED, AND WHO IT REACHED"
+            closing="What would you do before the next storm, if you could start earlier?"
+        else:
+            self.modal_header("A BEGINNING YOU MADE TOGETHER","Common ground, found.",(120,70,1040,700))
+            paragraphs,rows,heading=state.epilogue(),state.recap(),"YOUR CHOICES, AND WHO THEY REACHED"
+            closing="What would you do differently in your own community?"
         clip=pygame.Rect(151,184,978,462)
         previous=self.surface.get_clip();self.surface.set_clip(clip)
         y=190-self.scroll
-        for i,paragraph in enumerate(self.state.epilogue()):
+        for i,paragraph in enumerate(paragraphs):
             y=u.paragraph(paragraph,(160,y),952,25 if i==0 else 21,INK if i==0 else MUTED,gap=7)+10
+        if not part2 and state.storm_phase()=="invited":
+            y=u.paragraph("A storm forecast is pinned at the neighbourhood circle. Part Two, Storm Season, begins whenever you are ready.",(160,y),952,21,GREEN,True,gap=7)+10
         y+=8
         for i,(key,label) in enumerate((("environment","A place to grow"),("equity","A place at the table"),("resilience","A place to breathe"))):
             x=185+i*325
             u.symbol(key,(x+25,y+22),GREEN,1.3)
             u.text(label,(x,y+54),22,INK,True)
-            u.text(str(round(self.state.metrics[key])),(x,y+88),30,GREEN,True)
+            u.text(str(round(state.metrics[key])),(x,y+88),30,GREEN,True)
         y+=146
-        rows=self.state.recap()
         if rows:
-            u.text("YOUR CHOICES, AND WHO THEY REACHED",(160,y),16,GREEN,True);y+=30
+            u.text(heading,(160,y),16,GREEN,True);y+=30
             for row in rows:
                 y=self.draw_recap_row(row,y)
-        u.text("What would you do differently in your own community?",(160,y+8),21,INK)
+        u.text(closing,(160,y+8),21,INK)
         y+=52
         self.max_scroll=max(0,y+self.scroll-clip.bottom)
         self.surface.set_clip(previous)
@@ -732,7 +830,7 @@ class App:
         else:
             self.step=self.state.next_step()
             marker=None
-            if self.mode=="play" and self.settings["show_way"] and "balanced" not in self.state.flags:
+            if self.mode=="play" and self.settings["show_way"]:
                 marker=self.world.hint_place(self.step[1],self.state)
             drift=(0,0)
             if self.mode=="quiet" and not self.settings["reduced_motion"]:
